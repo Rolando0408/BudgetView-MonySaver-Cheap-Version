@@ -120,3 +120,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Oculta el indicador de desarrollo de Next.js que aparece como botón con la N. */
+.nextjs-devindicator,
+nextjs-portal {
+  display: none !important;
+}
