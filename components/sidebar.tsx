@@ -16,7 +16,13 @@ const items = [
   { href: "/dashboard/exportar", label: "Exportar", icon: Download },
 ]
 
-export function Sidebar({ className }: { className?: string }) {
+type SidebarProps = {
+  className?: string
+  onNavigate?: (href: string) => void
+  navigating?: boolean
+}
+
+export function Sidebar({ className, onNavigate, navigating = false }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = React.useState(false)
@@ -107,6 +113,18 @@ export function Sidebar({ className }: { className?: string }) {
 
   const accountLabel = displayName || "Cuenta"
 
+  const handleNavigate = React.useCallback(
+    (href: string) => {
+      if (pathname === href) return
+      if (onNavigate) {
+        onNavigate(href)
+        return
+      }
+      router.push(href)
+    },
+    [onNavigate, pathname, router]
+  )
+
   return (
     <aside
       className={cn(
@@ -142,11 +160,12 @@ export function Sidebar({ className }: { className?: string }) {
               type="button"
               variant={active ? "default" : "ghost"}
               className={cn(
-                      "w-full justify-start gap-2 rounded-lg",
+                "w-full justify-start gap-2 rounded-lg",
                 active && "bg-primary text-primary-foreground hover:bg-primary/90",
                 collapsed && "px-0 justify-center"
               )}
-              onClick={() => router.push(href)}
+              onClick={() => handleNavigate(href)}
+              disabled={navigating && !active}
             >
               <Icon className="size-4" />
               {!collapsed && <span className="text-sm font-medium">{label}</span>}
