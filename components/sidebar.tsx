@@ -22,6 +22,7 @@ export function Sidebar({ className }: { className?: string }) {
   const [collapsed, setCollapsed] = React.useState(false)
   const [profileOpen, setProfileOpen] = React.useState(false)
   const [displayName, setDisplayName] = React.useState("")
+  const [signingOut, setSigningOut] = React.useState(false)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const dropdownRef = React.useRef<HTMLDivElement | null>(null)
 
@@ -89,6 +90,20 @@ export function Sidebar({ className }: { className?: string }) {
       document.removeEventListener("keydown", handleKeyDown)
     }
   }, [profileOpen])
+
+  const handleSignOut = React.useCallback(async () => {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await supabase.auth.signOut()
+      setProfileOpen(false)
+      router.push("/login")
+    } catch (error) {
+      console.error("Error al cerrar sesión", error)
+    } finally {
+      setSigningOut(false)
+    }
+  }, [router, signingOut])
 
   const accountLabel = displayName || "Cuenta"
 
@@ -178,6 +193,8 @@ export function Sidebar({ className }: { className?: string }) {
                 type="button"
                 variant="ghost"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleSignOut}
+                disabled={signingOut}
               >
                 <LogOut className="size-4" />
                 <span>Cerrar sesión</span>
