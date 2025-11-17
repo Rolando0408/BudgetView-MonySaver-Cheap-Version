@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
+import { Loader2 } from "lucide-react"
 
 export function LoginForm({
   className,
@@ -115,7 +116,14 @@ export function LoginForm({
         </Field>
         <Field>
           <Button type="submit" disabled={loading}>
-            {loading ? "Iniciando..." : "Iniciar sesión"}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Iniciando...
+              </>
+            ) : (
+              "Iniciar sesión"
+            )}
           </Button>
         </Field>
         <FieldSeparator>O continúa con</FieldSeparator>
