@@ -8,42 +8,59 @@ import {
   BarChart3,
   Plus,
   MoreVertical,
-  Wallet2,
-  ShoppingBag,
-  UtensilsCrossed,
-  Car,
-  Flame,
-  House,
-  CircleDollarSign,
-  Briefcase,
-  PiggyBank,
-  HandCoins,
+  Pencil,
+  Trash2,
 } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
-type TotalsState = {
-  expenses: number
-  income: number
-  categories: number
-}
+type CategorySection = "gasto" | "ingreso"
 
 type TransactionRow = {
   monto: number | string | null
-  tipo: "ingreso" | "gasto" | null
+  tipo: CategorySection | null
   categorias:
     | {
         id: string
         nombre: string | null
+        tipo: CategorySection | null
       }
     | Array<{
         id: string
         nombre: string | null
+        tipo: CategorySection | null
       }>
     | null
+}
+
+type CategoryRow = {
+  id: string
+  nombre: string | null
+  tipo: CategorySection | null
+}
+
+type CategoryStat = {
+  id: string
+  name: string
+  expenseTotal: number
+  expenseCount: number
+  incomeTotal: number
+  incomeCount: number
+  lastKnownType: CategorySection | null
 }
 
 type CategoryAggregate = {
@@ -59,13 +76,10 @@ type CategoryGroups = {
   ingresos: CategoryAggregate[]
 }
 
-type CategoryAppearance = {
-  card: string
-  iconWrapper: string
-  badge: string
-  valueClass: string
-  progress: string
-  icon: LucideIcon
+type TotalsState = {
+  expenses: number
+  income: number
+  categories: number
 }
 
 const currencyFormatter = new Intl.NumberFormat("es-ES", {
@@ -73,105 +87,19 @@ const currencyFormatter = new Intl.NumberFormat("es-ES", {
   currency: "USD",
 })
 
-const expensePalettes: readonly CategoryAppearance[] = [
-  {
-    card: "border border-red-100 bg-red-50",
-    iconWrapper: "bg-red-500 text-white",
-    badge: "bg-red-500/15 text-red-600",
-    valueClass: "text-red-600",
-    progress: "bg-red-500",
-    icon: Wallet2,
+const categoryCardStyles: Record<CategorySection, { card: string; value: string; badge: string; bar: string }> = {
+  gasto: {
+    card: "border border-red-200 bg-red-50 dark:bg-background dark:border-red-500/60",
+    value: "text-red-600 dark:text-red-300",
+    badge: "bg-red-500/15 text-red-600 dark:bg-red-500/20 dark:text-red-200",
+    bar: "bg-red-500 dark:bg-red-500/60",
   },
-  {
-    card: "border border-orange-100 bg-orange-50",
-    iconWrapper: "bg-orange-500 text-white",
-    badge: "bg-orange-500/15 text-orange-600",
-    valueClass: "text-orange-600",
-    progress: "bg-orange-500",
-    icon: ShoppingBag,
+  ingreso: {
+    card: "border border-emerald-200 bg-emerald-50 dark:bg-background dark:border-emerald-500/60",
+    value: "text-emerald-600 dark:text-emerald-300",
+    badge: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200",
+    bar: "bg-emerald-500 dark:bg-emerald-500/60",
   },
-  {
-    card: "border border-purple-100 bg-purple-50",
-    iconWrapper: "bg-purple-500 text-white",
-    badge: "bg-purple-500/15 text-purple-600",
-    valueClass: "text-purple-600",
-    progress: "bg-purple-500",
-    icon: UtensilsCrossed,
-  },
-  {
-    card: "border border-amber-100 bg-amber-50",
-    iconWrapper: "bg-amber-500 text-white",
-    badge: "bg-amber-500/15 text-amber-600",
-    valueClass: "text-amber-600",
-    progress: "bg-amber-500",
-    icon: Car,
-  },
-  {
-    card: "border border-rose-100 bg-rose-50",
-    iconWrapper: "bg-rose-500 text-white",
-    badge: "bg-rose-500/15 text-rose-600",
-    valueClass: "text-rose-600",
-    progress: "bg-rose-500",
-    icon: Flame,
-  },
-  {
-    card: "border border-sky-100 bg-sky-50",
-    iconWrapper: "bg-sky-500 text-white",
-    badge: "bg-sky-500/15 text-sky-600",
-    valueClass: "text-sky-600",
-    progress: "bg-sky-500",
-    icon: House,
-  },
-]
-
-const incomePalettes: readonly CategoryAppearance[] = [
-  {
-    card: "border border-emerald-100 bg-emerald-50",
-    iconWrapper: "bg-emerald-500 text-white",
-    badge: "bg-emerald-500/15 text-emerald-600",
-    valueClass: "text-emerald-600",
-    progress: "bg-emerald-500",
-    icon: CircleDollarSign,
-  },
-  {
-    card: "border border-teal-100 bg-teal-50",
-    iconWrapper: "bg-teal-500 text-white",
-    badge: "bg-teal-500/15 text-teal-600",
-    valueClass: "text-teal-600",
-    progress: "bg-teal-500",
-    icon: Briefcase,
-  },
-  {
-    card: "border border-lime-100 bg-lime-50",
-    iconWrapper: "bg-lime-500 text-white",
-    badge: "bg-lime-500/15 text-lime-600",
-    valueClass: "text-lime-700",
-    progress: "bg-lime-500",
-    icon: PiggyBank,
-  },
-  {
-    card: "border border-cyan-100 bg-cyan-50",
-    iconWrapper: "bg-cyan-500 text-white",
-    badge: "bg-cyan-500/15 text-cyan-600",
-    valueClass: "text-cyan-600",
-    progress: "bg-cyan-500",
-    icon: HandCoins,
-  },
-]
-
-const hashString = (value: string) => {
-  let hash = 0
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(index)
-    hash |= 0
-  }
-  return Math.abs(hash)
-}
-
-const appearanceFor = (name: string, type: "gasto" | "ingreso"): CategoryAppearance => {
-  const palettes = type === "gasto" ? expensePalettes : incomePalettes
-  const index = hashString(name) % palettes.length
-  return palettes[index]
 }
 
 export default function CategoriasPage() {
@@ -179,42 +107,93 @@ export default function CategoriasPage() {
   const [categoryGroups, setCategoryGroups] = React.useState<CategoryGroups>({ gastos: [], ingresos: [] })
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [categoryName, setCategoryName] = React.useState("")
+  const [categoryType, setCategoryType] = React.useState<CategorySection>("gasto")
+  const [saving, setSaving] = React.useState(false)
+  const [formError, setFormError] = React.useState<string | null>(null)
+  const [categoriesList, setCategoriesList] = React.useState<CategoryRow[]>([])
+  const [optionsOpenId, setOptionsOpenId] = React.useState<string | null>(null)
+  const [editingCategoryId, setEditingCategoryId] = React.useState<string | null>(null)
+  const [actionPendingId, setActionPendingId] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    let active = true
+  const loadData = React.useCallback(
+    async (signal?: AbortSignal) => {
+      if (signal?.aborted) {
+        return
+      }
 
-    const loadData = async () => {
       setLoading(true)
       setError(null)
       try {
         const [transactionsResult, categoriesResult] = await Promise.all([
-          supabase.from("transacciones").select("monto,tipo,categorias(id,nombre)"),
-          supabase.from("categorias").select("id", { count: "exact", head: true }),
+          supabase.from("transacciones").select("monto,tipo,categorias(id,nombre,tipo)"),
+          supabase.from("categorias").select("id,nombre,tipo"),
         ])
 
-        if (!active) return
+        if (signal?.aborted) {
+          return
+        }
+
+        const missingTypeMessage =
+          'La tabla "categorias" debe tener la columna "tipo" con valores "gasto" o "ingreso".'
 
         if (transactionsResult.error) {
+          if (transactionsResult.error.message?.toLowerCase().includes("tipo")) {
+            setError(missingTypeMessage)
+            setCategoryGroups({ gastos: [], ingresos: [] })
+            setTotals({ expenses: 0, income: 0, categories: 0 })
+            setCategoriesList([])
+            return
+          }
           throw transactionsResult.error
         }
+
         if (categoriesResult.error) {
+          if (categoriesResult.error.message?.toLowerCase().includes("tipo")) {
+            setError(missingTypeMessage)
+            setCategoryGroups({ gastos: [], ingresos: [] })
+            setTotals({ expenses: 0, income: 0, categories: 0 })
+            setCategoriesList([])
+            return
+          }
           throw categoriesResult.error
         }
 
-        const data = (transactionsResult.data ?? []) as TransactionRow[]
+        const transactions = (transactionsResult.data ?? []) as TransactionRow[]
+        const categories = (categoriesResult.data ?? []) as CategoryRow[]
+        setCategoriesList(categories)
 
         let expensesTotal = 0
         let incomeTotal = 0
+        const stats = new Map<string, CategoryStat>()
 
-        const aggregates = {
-          gasto: new Map<string, { id: string; name: string; total: number; count: number }>(),
-          ingreso: new Map<string, { id: string; name: string; total: number; count: number }>(),
+        const registerStat = (id: string, name: string) => {
+          let stat = stats.get(id)
+          if (!stat) {
+            stat = {
+              id,
+              name,
+              expenseTotal: 0,
+              expenseCount: 0,
+              incomeTotal: 0,
+              incomeCount: 0,
+              lastKnownType: null,
+            }
+            stats.set(id, stat)
+          }
+          return stat
         }
 
-        data.forEach((tx) => {
+        transactions.forEach((tx) => {
+          if (signal?.aborted) {
+            return
+          }
+
           if (!tx.tipo) {
             return
           }
+
           const numericAmount = Number(tx.monto ?? 0)
           if (Number.isNaN(numericAmount)) {
             return
@@ -222,42 +201,95 @@ export default function CategoriasPage() {
 
           if (tx.tipo === "gasto") {
             expensesTotal += numericAmount
-          }
-          if (tx.tipo === "ingreso") {
+          } else if (tx.tipo === "ingreso") {
             incomeTotal += numericAmount
           }
 
           const categoryRecord = Array.isArray(tx.categorias) ? tx.categorias[0] : tx.categorias
           const categoryId = categoryRecord?.id ?? `sin-${tx.tipo}`
           const categoryName = categoryRecord?.nombre?.trim() || "Sin categoría"
-          const bucket = aggregates[tx.tipo]
+          const stat = registerStat(categoryId, categoryName)
 
-          if (!bucket.has(categoryId)) {
-            bucket.set(categoryId, {
-              id: categoryId,
-              name: categoryName,
-              total: 0,
-              count: 0,
-            })
+          if (tx.tipo === "gasto") {
+            stat.expenseTotal += numericAmount
+            stat.expenseCount += 1
+          } else {
+            stat.incomeTotal += numericAmount
+            stat.incomeCount += 1
           }
 
-          const entry = bucket.get(categoryId)
-          if (!entry) {
-            return
+          if (categoryRecord?.tipo) {
+            stat.lastKnownType = categoryRecord.tipo
+          } else if (!stat.lastKnownType) {
+            stat.lastKnownType = tx.tipo
           }
-          entry.total += numericAmount
-          entry.count += 1
         })
 
-        const gastoArray: CategoryAggregate[] = Array.from(aggregates.gasto.values()).map((item) => ({
-          ...item,
-          percentage: expensesTotal === 0 ? 0 : (item.total / expensesTotal) * 100,
-        }))
+        const gastoArray: CategoryAggregate[] = []
+        const ingresoArray: CategoryAggregate[] = []
+        const totalCategories = new Set<string>()
 
-        const ingresoArray: CategoryAggregate[] = Array.from(aggregates.ingreso.values()).map((item) => ({
-          ...item,
-          percentage: incomeTotal === 0 ? 0 : (item.total / incomeTotal) * 100,
-        }))
+        const pushEntry = (
+          section: CategorySection,
+          id: string,
+          name: string,
+          stat: CategoryStat | undefined
+        ) => {
+          const total = section === "gasto" ? stat?.expenseTotal ?? 0 : stat?.incomeTotal ?? 0
+          const count = section === "gasto" ? stat?.expenseCount ?? 0 : stat?.incomeCount ?? 0
+          const base = section === "gasto" ? expensesTotal : incomeTotal
+          const percentage = base === 0 ? 0 : (total / base) * 100
+
+          const entry: CategoryAggregate = {
+            id,
+            name,
+            total,
+            count,
+            percentage,
+          }
+
+          if (section === "gasto") {
+            gastoArray.push(entry)
+          } else {
+            ingresoArray.push(entry)
+          }
+        }
+
+        categories.forEach((category) => {
+          if (signal?.aborted) {
+            return
+          }
+
+          const stat = stats.get(category.id)
+          const name = category.nombre?.trim() || "Sin categoría"
+          totalCategories.add(category.id)
+
+          let resolvedType: CategorySection = "gasto"
+          if (category.tipo === "ingreso") {
+            resolvedType = "ingreso"
+          } else if (category.tipo === "gasto") {
+            resolvedType = "gasto"
+          } else if (stat?.lastKnownType) {
+            resolvedType = stat.lastKnownType
+          } else if (stat && stat.incomeTotal > stat.expenseTotal) {
+            resolvedType = "ingreso"
+          }
+
+          pushEntry(resolvedType, category.id, name, stat)
+          if (stat) {
+            stats.delete(category.id)
+          }
+        })
+
+        stats.forEach((stat) => {
+          if (signal?.aborted) {
+            return
+          }
+
+          totalCategories.add(stat.id)
+          const resolvedType: CategorySection = stat.incomeTotal > stat.expenseTotal ? "ingreso" : "gasto"
+          pushEntry(resolvedType, stat.id, stat.name, stat)
+        })
 
         gastoArray.sort((a, b) => b.total - a.total)
         ingresoArray.sort((a, b) => b.total - a.total)
@@ -265,49 +297,210 @@ export default function CategoriasPage() {
         setTotals({
           expenses: expensesTotal,
           income: incomeTotal,
-          categories: categoriesResult.count ?? 0,
+          categories: totalCategories.size,
         })
 
         setCategoryGroups({ gastos: gastoArray, ingresos: ingresoArray })
       } catch (fetchError) {
-        if (!active) return
+        if (signal?.aborted) {
+          return
+        }
         console.error("Error al cargar datos de categorías", fetchError)
         setError("No pudimos cargar la información. Intenta nuevamente.")
+        setCategoryGroups({ gastos: [], ingresos: [] })
+        setTotals({ expenses: 0, income: 0, categories: 0 })
+        setCategoriesList([])
       } finally {
-        if (active) {
+        if (!signal?.aborted) {
           setLoading(false)
         }
       }
-    }
+    },
+    []
+  )
 
-    loadData()
+  React.useEffect(() => {
+    const controller = new AbortController()
+
+    loadData(controller.signal)
 
     return () => {
-      active = false
+      controller.abort()
     }
+  }, [loadData])
+
+  const resetFormState = React.useCallback(() => {
+    setCategoryName("")
+    setCategoryType("gasto")
+    setFormError(null)
+    setEditingCategoryId(null)
   }, [])
+
+  const handleDialogChange = React.useCallback(
+    (open: boolean) => {
+      setDialogOpen(open)
+      if (!open) {
+        resetFormState()
+      }
+    },
+    [resetFormState]
+  )
+
+  React.useEffect(() => {
+    if (!optionsOpenId) {
+      return
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest("[data-category-options]")) {
+        setOptionsOpenId(null)
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick)
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick)
+    }
+  }, [optionsOpenId])
+
+  const handleSubmitCategory = React.useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      const trimmed = categoryName.trim()
+      if (!trimmed) {
+        setFormError("El nombre es obligatorio.")
+        return
+      }
+
+      setSaving(true)
+      setFormError(null)
+      try {
+        if (editingCategoryId) {
+          const { error: updateError } = await supabase
+            .from("categorias")
+            .update({ nombre: trimmed, tipo: categoryType })
+            .eq("id", editingCategoryId)
+          if (updateError) {
+            throw updateError
+          }
+        } else {
+          const { error: insertError } = await supabase.from("categorias").insert({
+            nombre: trimmed,
+            tipo: categoryType,
+          })
+          if (insertError) {
+            throw insertError
+          }
+        }
+
+        resetFormState()
+        setDialogOpen(false)
+        setOptionsOpenId(null)
+        await loadData()
+      } catch (submitError) {
+        console.error(
+          editingCategoryId ? "Error al actualizar categoría" : "Error al crear categoría",
+          submitError
+        )
+        setFormError(
+          editingCategoryId
+            ? "No pudimos actualizar la categoría. Intenta nuevamente."
+            : "No pudimos crear la categoría. Intenta nuevamente."
+        )
+      } finally {
+        setSaving(false)
+      }
+    },
+    [categoryName, categoryType, editingCategoryId, loadData, resetFormState]
+  )
+
+  const handleOpenEdit = React.useCallback(
+    (categoryId: string, fallbackName: string, fallbackType: CategorySection) => {
+      const record = categoriesList.find((item) => item.id === categoryId)
+      const resolvedName = record?.nombre?.trim() ?? fallbackName.trim()
+      const resolvedType: CategorySection =
+        record?.tipo === "ingreso"
+          ? "ingreso"
+          : record?.tipo === "gasto"
+          ? "gasto"
+          : fallbackType
+
+      setCategoryName(resolvedName)
+      setCategoryType(resolvedType)
+      setEditingCategoryId(categoryId)
+      setFormError(null)
+      setDialogOpen(true)
+      setOptionsOpenId(null)
+    },
+    [categoriesList]
+  )
+
+  const handleDeleteCategory = React.useCallback(
+    async (categoryId: string, displayName: string) => {
+      const confirmed = window.confirm(
+        `¿Eliminar la categoría "${displayName}"? Esta acción no se puede deshacer.`
+      )
+      if (!confirmed) {
+        return
+      }
+
+      setActionPendingId(categoryId)
+      try {
+        const { error: deleteError } = await supabase
+          .from("categorias")
+          .delete()
+          .eq("id", categoryId)
+        if (deleteError) {
+          throw deleteError
+        }
+
+        setOptionsOpenId(null)
+        if (dialogOpen && editingCategoryId === categoryId) {
+          setDialogOpen(false)
+          resetFormState()
+        }
+
+        await loadData()
+      } catch (deleteError) {
+        console.error("Error al eliminar categoría", deleteError)
+        setError("No pudimos eliminar la categoría. Intenta nuevamente.")
+      } finally {
+        setActionPendingId(null)
+      }
+    },
+    [dialogOpen, editingCategoryId, loadData, resetFormState]
+  )
+
+  const categoryIdSet = React.useMemo(() => new Set(categoriesList.map((item) => item.id)), [
+    categoriesList,
+  ])
+  const isEditing = Boolean(editingCategoryId)
 
   const summaryCards = [
     {
       title: "Total Gastos",
       value: currencyFormatter.format(totals.expenses),
       icon: ArrowDownCircle,
-      accent: "bg-red-50 border border-red-100 text-red-600",
-      iconStyles: "bg-red-500 text-white",
+      accent:
+        "border border-red-100 bg-red-50 text-red-600 dark:bg-background dark:border-red-500/60 dark:text-red-300",
+      iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
     },
     {
       title: "Total Ingresos",
       value: currencyFormatter.format(totals.income),
       icon: ArrowUpCircle,
-      accent: "bg-emerald-50 border border-emerald-100 text-emerald-600",
-      iconStyles: "bg-emerald-500 text-white",
+      accent:
+        "border border-emerald-100 bg-emerald-50 text-emerald-600 dark:bg-background dark:border-emerald-500/60 dark:text-emerald-300",
+      iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
     },
     {
       title: "Categorías Activas",
       value: totals.categories.toString(),
       icon: BarChart3,
-      accent: "bg-blue-50 border border-blue-100 text-blue-600",
-      iconStyles: "bg-blue-500 text-white",
+      accent:
+        "border border-blue-100 bg-blue-50 text-blue-600 dark:bg-background dark:border-blue-500/60 dark:text-blue-300",
+      iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
     },
   ]
 
@@ -315,7 +508,7 @@ export default function CategoriasPage() {
     title: string
     description: string
     data: CategoryAggregate[]
-    type: "gasto" | "ingreso"
+    type: CategorySection
   }> = [
     {
       title: "Categorías de Gastos",
@@ -340,10 +533,69 @@ export default function CategoriasPage() {
             Revisa el comportamiento de tus categorías y crea nuevas según lo necesites.
           </p>
         </div>
-        <Button type="button" className="w-full gap-2 md:w-auto" size="lg">
-          <Plus className="size-4" />
-          Nueva Categoría
-        </Button>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              className="w-full gap-2 md:w-auto"
+              size="lg"
+              onClick={resetFormState}
+              disabled={saving}
+            >
+              <Plus className="size-4" />
+              Nueva Categoría
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{isEditing ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
+              <DialogDescription>
+                {isEditing
+                  ? "Actualiza el nombre o el tipo de la categoría seleccionada."
+                  : "Define un nombre y el tipo para organizar tus transacciones."}
+              </DialogDescription>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={handleSubmitCategory}>
+              <div className="space-y-2">
+                <Label htmlFor="category-name">Nombre</Label>
+                <Input
+                  id="category-name"
+                  placeholder="Ej. Servicios"
+                  value={categoryName}
+                  onChange={(event) => setCategoryName(event.target.value)}
+                  disabled={saving}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="category-type">Tipo</Label>
+                <select
+                  id="category-type"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={categoryType}
+                  onChange={(event) => setCategoryType(event.target.value as CategorySection)}
+                  disabled={saving}
+                >
+                  <option value="gasto">Gasto</option>
+                  <option value="ingreso">Ingreso</option>
+                </select>
+              </div>
+              {formError && <p className="text-sm text-destructive">{formError}</p>}
+              <DialogFooter className="sm:justify-end">
+                <DialogClose asChild>
+                  <Button type="button" variant="ghost" disabled={saving}>
+                    Cancelar
+                  </Button>
+                </DialogClose>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  {isEditing ? "Guardar cambios" : "Crear categoría"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {error && (
@@ -374,87 +626,132 @@ export default function CategoriasPage() {
         ))}
       </div>
 
-      {sections.map(({ title, description, data, type }) => (
-        <section key={title} className="space-y-4">
-          <div>
-            <h2
-              className={cn(
-                "text-xl font-semibold",
-                type === "gasto" ? "text-red-600" : "text-emerald-600"
-              )}
-            >
-              {title}
-            </h2>
-            <p className="text-sm text-muted-foreground">{description}</p>
-          </div>
-
-          {loading ? (
-            <div className="flex h-32 items-center justify-center rounded-xl border border-dashed">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      {sections.map(({ title, description, data, type }) => {
+        const styles = categoryCardStyles[type]
+        return (
+          <section key={title} className="space-y-4">
+            <div>
+              <h2 className={cn("text-xl font-semibold", type === "gasto" ? "text-red-600" : "text-emerald-600")}>
+                {title}
+              </h2>
+              <p className="text-sm text-muted-foreground">{description}</p>
             </div>
-          ) : data.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-              Aún no registras transacciones en estas categorías.
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.map((category) => {
-                const appearance = appearanceFor(category.name, type)
-                const Icon = appearance.icon
-                const percentageLabel = `${category.percentage.toFixed(1)}%`
-                const transactionLabel = `${category.count} ${category.count === 1 ? "transacción" : "transacciones"}`
 
-                return (
-                  <Card key={`${type}-${category.id}`} className={cn("relative overflow-hidden", appearance.card)}>
-                    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
-                      <div className="flex items-start gap-3">
-                        <span className={cn("flex size-12 items-center justify-center rounded-full", appearance.iconWrapper)}>
-                          <Icon className="size-6" />
-                        </span>
-                        <div>
-                          <CardTitle className={cn("text-lg font-semibold text-black", "dark:text-black")}>
-                            {category.name}
+            {loading ? (
+              <div className="flex h-32 items-center justify-center rounded-xl border border-dashed">
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : data.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                Aún no registras transacciones en estas categorías.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {data.map((category) => {
+                  const percentageLabel = `${category.percentage.toFixed(1)}%`
+                  const transactionLabel = `${category.count} ${category.count === 1 ? "transacción" : "transacciones"}`
+                  const displayName = category.name || "Sin categoría"
+                  const canManageCategory =
+                    categoryIdSet.has(category.id) && !category.id.startsWith("sin-")
+                  const isOptionOpen = optionsOpenId === category.id
+                  const isDeleting = actionPendingId === category.id
+
+                  return (
+                    <Card key={`${type}-${category.id}`} className={styles.card}>
+                      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+                        <div className="space-y-1">
+                          <CardTitle
+                            className={cn("text-lg font-semibold text-slate-900", "dark:text-slate-100")}
+                          >
+                            {displayName}
                           </CardTitle>
                           <p className="text-xs text-muted-foreground">{transactionLabel}</p>
                         </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-muted-foreground"
-                        aria-label={`Acciones para ${category.name}`}
-                      >
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <p className={cn("text-3xl font-semibold tracking-tight", appearance.valueClass)}>
-                          {currencyFormatter.format(category.total)}
-                        </p>
-                        <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", appearance.badge)}>
-                          {percentageLabel}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Del total de {type === "gasto" ? "gastos" : "ingresos"}
-                      </div>
-                      <div className="h-2 rounded-full bg-muted/70">
-                        <div
-                          className={cn("h-full rounded-full", appearance.progress)}
-                          style={{ width: `${Math.min(category.percentage, 100)}%` }}
-                          aria-hidden
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </section>
-      ))}
+                        {canManageCategory && (
+                          <div className="relative" data-category-options>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground"
+                              aria-haspopup="menu"
+                              aria-expanded={isOptionOpen}
+                              aria-label={`Opciones para ${displayName}`}
+                              onClick={() =>
+                                setOptionsOpenId((current) =>
+                                  current === category.id ? null : category.id
+                                )
+                              }
+                              disabled={isDeleting}
+                            >
+                              {isDeleting ? (
+                                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                              ) : (
+                                <MoreVertical className="size-4" />
+                              )}
+                              <span className="sr-only">Abrir opciones</span>
+                            </Button>
+                            {isOptionOpen && (
+                              <div
+                                className="absolute right-0 top-9 z-10 w-44 rounded-md border bg-popover p-1 text-sm shadow-md"
+                                role="menu"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEdit(category.id, displayName, type)}
+                                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  role="menuitem"
+                                >
+                                  <Pencil className="size-4" />
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCategory(category.id, displayName)}
+                                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50"
+                                  role="menuitem"
+                                  disabled={isDeleting}
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="size-4" />
+                                  )}
+                                  Eliminar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <p className={cn("text-3xl font-semibold tracking-tight", styles.value)}>
+                            {currencyFormatter.format(category.total)}
+                          </p>
+                          <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", styles.badge)}>
+                            {percentageLabel}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Del total de {type === "gasto" ? "gastos" : "ingresos"}
+                        </div>
+                        <div className="h-2 rounded-full bg-muted/70">
+                          <div
+                            className={cn("h-full rounded-full", styles.bar)}
+                            style={{ width: `${Math.min(category.percentage, 100)}%` }}
+                            aria-hidden
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }
