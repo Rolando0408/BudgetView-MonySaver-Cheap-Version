@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { supabase } from "@/lib/supabaseClient"
+import { Header } from "@/components/header"
+
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -83,18 +85,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-svh bg-background p-6 gap-6">
-      <Sidebar onNavigate={handleNavigate} navigating={navigating} />
-      <main className="relative flex-1 rounded-xl border bg-card p-6 shadow-sm" aria-busy={navigating}>
-        {navigating && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-card/75 backdrop-blur-sm">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+    <div>
+      <Header />
+      <div className="flex min-h-svh bg-background gap-6 pr-6 pb-6 pl-6 pt-40 md:pt-30">
+        <Sidebar onNavigate={handleNavigate} navigating={navigating} />
+        <main className="relative flex-1 rounded-xl border bg-card p-6 shadow-sm" aria-busy={navigating}>
+          {navigating && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-card/75 backdrop-blur-sm">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          <div className={`transition-opacity ${navigating ? "opacity-50" : "opacity-100"}`}>
+            {children}
           </div>
-        )}
-        <div className={`transition-opacity ${navigating ? "opacity-50" : "opacity-100"}`}>
-          {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
