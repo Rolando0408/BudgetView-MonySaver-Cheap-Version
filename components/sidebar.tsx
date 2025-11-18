@@ -128,7 +128,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
   return (
     <aside
       className={cn(
-        "flex h-full flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-[width] duration-200",
+        "sticky top-33 self-start flex max-h-svh flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-[width] duration-200 min-h-0 z-40",
         collapsed ? "w-16" : "w-60",
         className
       )}
@@ -151,7 +151,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
         </div>
       </div>
       <div className="h-px bg-border" />
-      <div className="flex-1 space-y-1">
+      <div className="flex-1 min-h-0 space-y-1 overflow-auto">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (
@@ -196,7 +196,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
             role="listbox"
             aria-label="Opciones de perfil"
             className={cn(
-              "ml-10 absolute z-20 w-32 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg divide-y divide-border",
+              "ml-10 absolute z-50 w-32 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg divide-y divide-border",
               collapsed
                 ? "left-full top-1/2 ml-2 -translate-y-1/2 origin-left"
                 : "top-full left-0 mt-2 origin-top"
