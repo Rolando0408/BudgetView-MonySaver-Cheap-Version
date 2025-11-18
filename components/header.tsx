@@ -75,7 +75,7 @@ export function Header({
     return (
         <header
             className={cn(
-                "flex w-full flex-col gap-4 rounded-2xl border bg-card/80 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/60 md:flex-row md:items-center md:justify-between",
+                "fixed top-0 left-0 right-0 z-50 flex w-full flex-col gap-4 border bg-card/80 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/60 md:flex-row md:items-center md:justify-between",
                 className
             )}
         >
