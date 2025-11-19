@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
-import { Loader2 } from "lucide-react"
+import { Loader2, ArrowLeft } from "lucide-react"
 
 export function SignupForm({
   className,
@@ -32,6 +32,9 @@ export function SignupForm({
     e.preventDefault()
     setError(null)
 
+    const trimmedName = name.trim()
+    const trimmedEmail = email.trim().toLowerCase()
+
     if (password !== confirmPassword) {
       setError("Las contraseñas no coinciden")
       return
@@ -44,16 +47,40 @@ export function SignupForm({
 
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
         password,
         options: {
-          data: { name },
+          data: { name: trimmedName },
         },
       })
 
       if (error) {
-        setError(error.message)
+        const msg = error.message?.toLowerCase() || ""
+        const isDuplicate =
+          msg.includes("already registered") ||
+          msg.includes("already exists") ||
+          msg.includes("ya existe") ||
+          msg.includes("existe") ||
+          msg.includes("correo") && msg.includes("registr")
+
+        if (isDuplicate) {
+          setError(
+            "Este correo ya está registrado. Inicia sesión o recupera tu contraseña."
+          )
+        } else {
+          setError(error.message)
+        }
+        return
+      }
+
+      // Supabase puede no lanzar error si la cuenta existe sin identidades nuevas.
+      // Patrón recomendado: user.identities.length === 0 => correo ya está registrado.
+      const identities = (data as any)?.user?.identities
+      if (Array.isArray(identities) && identities.length === 0) {
+        setError(
+          "Este correo ya está registrado. Inicia sesión o recupera tu contraseña."
+        )
         return
       }
 
@@ -69,19 +96,24 @@ export function SignupForm({
   return (
     <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
       <FieldGroup>
+        <Field>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1 text-muted-foreground hover:text-foreground"
+            onClick={() => router.push("/login")}
+            aria-label="Volver al login"
+          >
+            <ArrowLeft className="size-4" /> Volver al login
+          </Button>
+        </Field>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
           <p className="text-muted-foreground text-sm text-balance">
             Completa los campos para crear tu cuenta.
           </p>
         </div>
-        {error && (
-          <Field>
-            <FieldDescription className="text-destructive text-sm text-center">
-              {error}
-            </FieldDescription>
-          </Field>
-        )}
         <Field>
           <FieldLabel htmlFor="name">Nombre completo</FieldLabel>
           <Input
@@ -144,6 +176,17 @@ export function SignupForm({
             )}
           </Button>
         </Field>
+        {error && (
+          <Field>
+            <FieldDescription
+              role="alert"
+              aria-live="polite"
+              className="text-destructive text-sm text-center"
+            >
+              {error}
+            </FieldDescription>
+          </Field>
+        )}
         <FieldSeparator>O continúa con</FieldSeparator>
         <Field>
           <Button variant="outline" type="button">
