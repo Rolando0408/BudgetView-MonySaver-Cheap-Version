@@ -128,7 +128,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
   return (
     <aside
       className={cn(
-        "sticky top-33 self-start flex max-h-svh flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-[width] duration-200 min-h-0 z-40",
+        "sticky top-25 self-start flex max-h-svh flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-[width] duration-200 min-h-0 z-40",
         collapsed ? "w-16" : "w-60",
         className
       )}
