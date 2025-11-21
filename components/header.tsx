@@ -253,7 +253,7 @@ export function Header({
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    <label className="ml-1 mb-0.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Mi billetera
                     </label>
 
@@ -261,7 +261,7 @@ export function Header({
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
-                                className="h-11 min-w-[220px] justify-between rounded-xl border bg-background/80 px-4 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                                className="h-9 w-35 justify-between rounded-xl border bg-background/80 px-4 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                                 disabled={walletsLoading || wallets.length === 0}
                             >
                                 <span>{walletButtonLabel}</span>
@@ -274,7 +274,7 @@ export function Header({
                                 )}
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-64">
+                        <DropdownMenuContent className="w-20">
                             {walletsLoading ? (
                                 <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
                                     <Loader2 className="size-4 animate-spin" />
