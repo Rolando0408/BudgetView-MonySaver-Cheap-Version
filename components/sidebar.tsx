@@ -173,7 +173,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           )
         })}
       </div>
-      <div className="relative mt-3 text-xs text-muted-foreground">
+      <div className="relative mt-37 text-xs text-muted-foreground">
         <Button
           ref={triggerRef}
           type="button"
