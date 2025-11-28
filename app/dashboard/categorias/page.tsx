@@ -447,6 +447,19 @@ export default function CategoriasPage() {
 
       setActionPendingId(categoryId)
       try {
+        const { count: linkedTransactions, error: linkError } = await supabase
+          .from("transacciones")
+          .select("id", { count: "exact", head: true })
+          .eq("categoria_id", categoryId)
+        if (linkError) {
+          throw linkError
+        }
+
+        if ((linkedTransactions ?? 0) > 0) {
+          setError("Primero elimina o reasigna las transacciones asociadas a esta categoría.")
+          return
+        }
+
         const { error: deleteError } = await supabase
           .from("categorias")
           .delete()
