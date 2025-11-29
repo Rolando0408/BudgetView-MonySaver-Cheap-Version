@@ -132,6 +132,39 @@ export function Header({
         }
     }, [selectedWallet])
 
+    const fetchBalance = React.useCallback(async () => {
+        if (!walletId) {
+            return null
+        }
+
+        const { data, error } = await supabase
+            .from("transacciones")
+            .select("monto,tipo")
+            .eq("billetera_id", walletId)
+
+        if (error) {
+            throw error
+        }
+
+        const rows = (data ?? []) as TransactionBalanceRow[]
+        let totalIncome = 0
+        let totalExpense = 0
+
+        for (const row of rows) {
+            const amount = Number(row.monto ?? 0)
+            if (Number.isNaN(amount)) {
+                continue
+            }
+            if (row.tipo === "ingreso") {
+                totalIncome += amount
+            } else if (row.tipo === "gasto") {
+                totalExpense += amount
+            }
+        }
+
+        return totalIncome - totalExpense
+    }, [walletId])
+
     React.useEffect(() => {
         if (!walletId) {
             return
@@ -139,38 +172,13 @@ export function Header({
 
         let active = true
 
-        const fetchBalance = async () => {
+        const loadBalance = async () => {
             setBalanceLoading(true)
             setBalanceError(null)
             try {
-                const { data, error } = await supabase
-                    .from("transacciones")
-                    .select("monto,tipo")
-                    .eq("billetera_id", walletId)
-
-                if (!active) return
-
-                if (error) {
-                    throw error
-                }
-
-                const rows = (data ?? []) as TransactionBalanceRow[]
-                let totalIncome = 0
-                let totalExpense = 0
-
-                for (const row of rows) {
-                    const amount = Number(row.monto ?? 0)
-                    if (Number.isNaN(amount)) {
-                        continue
-                    }
-                    if (row.tipo === "ingreso") {
-                        totalIncome += amount
-                    } else if (row.tipo === "gasto") {
-                        totalExpense += amount
-                    }
-                }
-
-                setBalance(totalIncome - totalExpense)
+                const total = await fetchBalance()
+                if (!active || total === null) return
+                setBalance(total)
             } catch (error) {
                 if (!active) return
                 console.error("Error al obtener el saldo actual", error)
@@ -182,12 +190,78 @@ export function Header({
             }
         }
 
-        fetchBalance()
+        loadBalance()
 
         return () => {
             active = false
         }
-    }, [walletId])
+    }, [walletId, fetchBalance])
+
+    React.useEffect(() => {
+        if (!walletId) {
+            return
+        }
+
+        const handleTransactionsUpdated = (event: Event) => {
+            if (!walletId) return
+            const customEvent = event as CustomEvent<{ walletId?: string }>
+            if (customEvent.detail?.walletId && customEvent.detail.walletId !== walletId) {
+                return
+            }
+
+            fetchBalance()
+                .then((total) => {
+                    if (total === null) return
+                    setBalance(total)
+                    setBalanceError(null)
+                })
+                .catch((error) => {
+                    console.error("Error al actualizar el saldo", error)
+                    setBalanceError("No pudimos cargar tu saldo.")
+                })
+        }
+
+        window.addEventListener("transactions:updated", handleTransactionsUpdated as EventListener)
+
+        return () => {
+            window.removeEventListener("transactions:updated", handleTransactionsUpdated as EventListener)
+        }
+    }, [walletId, fetchBalance])
+
+    React.useEffect(() => {
+        if (!walletId) {
+            return
+        }
+
+        const channel = supabase
+            .channel(`transacciones-balance-${walletId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "transacciones",
+                    filter: `billetera_id=eq.${walletId}`,
+                },
+                () => {
+                    fetchBalance()
+                        .then((total) => {
+                            if (total === null) return
+                            setBalance(total)
+                            setBalanceError(null)
+                        })
+                        .catch((error) => {
+                            console.error("Error al actualizar el saldo", error)
+                            setBalanceError("No pudimos cargar tu saldo.")
+                        })
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [walletId, fetchBalance])
 
     React.useEffect(() => {
         if (walletId) {

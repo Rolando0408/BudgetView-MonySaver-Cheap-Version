@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 type TransactionType = "gasto" | "ingreso"
@@ -255,6 +256,11 @@ export default function TransaccionesPage() {
 
         resetFormState()
         await loadData()
+        window.dispatchEvent(
+          new CustomEvent("transactions:updated", {
+            detail: { walletId: billeteraId },
+          })
+        )
       } catch (submitError) {
         console.error("Error al crear transacción", submitError)
         setFormError("No pudimos crear la transacción. Intenta nuevamente.")
@@ -334,7 +340,7 @@ export default function TransaccionesPage() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-[240px] justify-start text-left font-normal bg-background",
+                          "w-60 justify-start text-left font-normal bg-background",
                           !customStartDate && "text-muted-foreground"
                         )}
                       >
@@ -351,6 +357,7 @@ export default function TransaccionesPage() {
                         mode="single"
                         selected={customStartDate}
                         onSelect={setCustomStartDate}
+                        disabled={customEndDate ? { after: customEndDate } : undefined}
                         initialFocus
                         locale={es}
                       />
@@ -368,7 +375,7 @@ export default function TransaccionesPage() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-[240px] justify-start text-left font-normal bg-background",
+                          "w-60 justify-start text-left font-normal bg-background",
                           !customEndDate && "text-muted-foreground"
                         )}
                       >
@@ -385,6 +392,7 @@ export default function TransaccionesPage() {
                         mode="single"
                         selected={customEndDate}
                         onSelect={setCustomEndDate}
+                        disabled={customStartDate ? { before: customStartDate } : undefined}
                         initialFocus
                         locale={es}
                       />
@@ -430,15 +438,16 @@ export default function TransaccionesPage() {
       {/* Two Column Layout */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left Column - Registration Form */}
-        <Card>
+        <Card className="flex h-115 flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plus className="size-5" />
               Registro de Transacciones
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmitTransaction}>
+          <CardContent className="flex-1 overflow-hidden">
+            <form className="flex h-full flex-col gap-4" onSubmit={handleSubmitTransaction}>
+              <div className="flex-1 space-y-4 overflow-y-auto pr-1">
               {/* Tipo */}
               <div className="space-y-2">
                 <Label htmlFor="transaction-tipo" className="text-base font-semibold">
@@ -507,24 +516,37 @@ export default function TransaccionesPage() {
                 <Label htmlFor="transaction-categoria" className="text-base font-semibold">
                   Categoría
                 </Label>
-                <select
-                  id="transaction-categoria"
-                  className="h-12 w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-base ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formCategoriaId}
-                  onChange={(event) => setFormCategoriaId(event.target.value)}
-                  disabled={saving}
-                  required
+                <Select
+                  value={formCategoriaId || undefined}
+                  onValueChange={setFormCategoriaId}
+                  disabled={saving || filteredCategories.length === 0}
                 >
-                  <option value="">Seleccionar categoría</option>
-                  {filteredCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.nombre || "Sin nombre"}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id="transaction-categoria"
+                    className="h-12 w-full text-base bg-muted/50"
+                  >
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredCategories.length === 0 ? (
+                      <SelectItem value="placeholder" disabled>
+                        {formTipo === "gasto"
+                          ? "No tienes categorías de gasto"
+                          : "No tienes categorías de ingreso"}
+                      </SelectItem>
+                    ) : (
+                      filteredCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.nombre || "Sin nombre"}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {formError && <p className="text-sm text-destructive">{formError}</p>}
+                {formError && <p className="text-sm text-destructive">{formError}</p>}
+              </div>
 
               {/* Submit Button */}
               <Button
@@ -548,28 +570,29 @@ export default function TransaccionesPage() {
           </CardContent>
         </Card>
 
-        {/* Right Column - Transaction History */}
-        <Card>
+
+        <Card className="flex h-115 flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <History className="size-5" />
               Historial de Movimientos
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-hidden">
             {loading ? (
-              <div className="flex h-64 items-center justify-center">
+              <div className="flex h-full items-center justify-center">
                 <Loader2 className="size-6 animate-spin text-muted-foreground" />
               </div>
             ) : filteredTransactions.length === 0 ? (
-              <div className="flex h-64 items-center justify-center rounded-xl border border-dashed">
+              <div className="flex h-full items-center justify-center rounded-xl border border-dashed">
                 <p className="text-sm text-muted-foreground text-center px-4">
                   No hay transacciones en este período.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                {filteredTransactions.map((transaction) => {
+              <div className="flex h-full flex-col overflow-hidden">
+                <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                  {filteredTransactions.map((transaction) => {
                   const isGasto = transaction.tipo === "gasto"
                   const categoryName = transaction.categorias?.nombre || "Sin categoría"
 
@@ -625,7 +648,8 @@ export default function TransaccionesPage() {
                       </div>
                     </div>
                   )
-                })}
+                  })}
+                </div>
               </div>
             )}
           </CardContent>
