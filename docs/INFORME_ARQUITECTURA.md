@@ -46,28 +46,50 @@ La elección de este stack tecnológico responde a las siguientes necesidades de
 El siguiente esquema ilustra cómo interactúan los diferentes componentes del sistema:
 
 ```mermaid
-graph TD
-    User[Usuario Final]
-    Browser[Navegador Web / Cliente]
-    NextServer[Servidor Next.js (Frontend & API)]
-    Supabase[Supabase (Backend)]
-    Auth[Servicio de Autenticación]
-    DB[(Base de Datos PostgreSQL)]
-
-    User -->|Interactúa| Browser
-    Browser -->|Solicita Páginas| NextServer
-    Browser -->|Lee/Escribe Datos (Cliente)| Supabase
-    NextServer -->|Renderiza UI| Browser
-    NextServer -->|Operaciones Seguras (Servidor)| Supabase
+graph TD;
+    A[Usuario] -->|Accede vía navegador| B[Next.js Frontend];
+    B -->|Renderiza páginas| C[Componentes React];
+    C -->|Login/Registro| D[Formularios Auth];
+    C -->|Dashboard| E[Vista Dashboard];
+    C -->|Gestión| F[Transacciones & Categorías];
     
-    subgraph "Nube / Supabase"
-        Supabase --> Auth
-        Supabase --> DB
-    end
+    D -->|Petición autenticación| G[Supabase Auth];
+    E -->|Consulta datos| H[Supabase Client];
+    F -->|CRUD operaciones| H;
+    
+    H -->|API calls| I[Supabase Backend];
+    G -->|Verifica credenciales| I;
+    
+    I -->|Row Level Security| J[(PostgreSQL Database)];
+    
+    J -->|Tablas: users| K[Datos Usuario];
+    J -->|Tablas: transactions| L[Datos Transacciones];
+    J -->|Tablas: categories| M[Datos Categorías];
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style I fill:#e8f5e9
+    style J fill:#f3e5f5
 ```
 
-### Flujo de Datos Básico:
-1.  El **Usuario** accede a la aplicación desde su navegador.
-2.  **Next.js** sirve la interfaz de usuario inicial.
-3.  Para iniciar sesión, el cliente se comunica directamente con el servicio de **Autenticación de Supabase**.
-4.  Para ver o guardar transacciones, la aplicación realiza peticiones seguras a la **Base de Datos PostgreSQL** en Supabase, validando los permisos del usuario en cada consulta.
+### Descripción del Flujo:
+
+**Capa de Presentación (Frontend):**
+1.  El **Usuario** accede a la aplicación a través de su navegador web.
+2.  **Next.js** maneja el enrutamiento y renderiza los componentes de React.
+3.  Los componentes principales incluyen:
+    *   Formularios de autenticación (Login/Registro)
+    *   Dashboard principal
+    *   Gestión de transacciones y categorías
+
+**Capa de Autenticación:**
+4.  Los formularios de autenticación se comunican directamente con **Supabase Auth** para validar credenciales.
+5.  Supabase gestiona sesiones y tokens JWT de forma segura.
+
+**Capa de Datos:**
+6.  Los componentes de la aplicación utilizan el **Supabase Client** para realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar).
+7.  Todas las peticiones pasan por el **Supabase Backend** que aplica políticas de seguridad (Row Level Security - RLS).
+8.  Los datos se almacenan en **PostgreSQL** en tablas específicas:
+    *   `users`: Información de usuarios
+    *   `transactions`: Registros de ingresos y gastos
+    *   `categories`: Categorías personalizadas
