@@ -39,6 +39,10 @@ type Transaction = {
   categorias?: Category | null
 }
 
+type TransactionQueryRow = Omit<Transaction, "categorias"> & {
+  categorias?: Category | Category[] | null
+}
+
 type PeriodFilter = "7days" | "thisMonth" | "lastMonth" | "custom"
 
 const currencyFormatter = new Intl.NumberFormat("es-ES", {
@@ -123,10 +127,13 @@ export default function TransaccionesPage() {
       if (categoriesResult.error) throw categoriesResult.error
 
       // Transform the data to match our Transaction type
-      const transformedTransactions = (transactionsResult.data ?? []).map((tx: any) => ({
-        ...tx,
-        categorias: Array.isArray(tx.categorias) ? tx.categorias[0] : tx.categorias,
-      })) as Transaction[]
+      const transformedTransactions = (transactionsResult.data ?? []).map((tx) => {
+        const row = tx as TransactionQueryRow
+        return {
+          ...row,
+          categorias: Array.isArray(row.categorias) ? row.categorias[0] : row.categorias,
+        }
+      }) as Transaction[]
 
       setTransactions(transformedTransactions)
       setCategories((categoriesResult.data ?? []) as Category[])
