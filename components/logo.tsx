@@ -12,12 +12,12 @@ export function Logo({ className }: LogoProps) {
             <Image
                 src="/images/logoBV.png"
                 alt="Logo de BudgetView"
-                width={150}
+                width={45}
                 height={30}
                 className="object-contain"
                 priority
             />
-            <div className="-ml-12">
+            <div className="ml-2">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                     MonySaver
                 </p>
