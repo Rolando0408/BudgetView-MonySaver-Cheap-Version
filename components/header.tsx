@@ -62,6 +62,20 @@ export function Header({
     selectedWallet,
     onWalletChange,
 }: HeaderProps) {
+    const broadcastWalletChange = React.useCallback((value: string) => {
+        if (typeof window === "undefined") return
+        try {
+            window.localStorage.setItem("dashboard.activeWalletId", value)
+        } catch (_error) {
+            // Ignore storage failures (private mode, etc.)
+        }
+
+        window.dispatchEvent(
+            new CustomEvent("wallet:changed", {
+                detail: { walletId: value },
+            })
+        )
+    }, [])
 
     const [walletId, setWalletId] = React.useState<string | null>(selectedWallet ?? null)
     const [wallets, setWallets] = React.useState<WalletOption[]>([])
@@ -75,6 +89,11 @@ export function Header({
         if (!selectedWallet) return
         setWalletId(selectedWallet)
     }, [selectedWallet])
+
+    React.useEffect(() => {
+        if (!walletId) return
+        broadcastWalletChange(walletId)
+    }, [walletId, broadcastWalletChange])
 
     React.useEffect(() => {
         let active = true
