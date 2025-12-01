@@ -87,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div>
       <Header />
-      <div className="flex min-h-svh bg-background gap-3 mt-3 pb-3 px-3 pt-40 md:pt-23">
+      <div className="flex min-h-svh bg-background gap-3 pb-3 px-3 pt-23 md:pt-26">
         <Sidebar onNavigate={handleNavigate} navigating={navigating} />
         <main className="relative flex-1 rounded-xl border bg-card p-6 shadow-sm" aria-busy={navigating}>
           {navigating && (

@@ -4,9 +4,10 @@ import { cn } from "@/lib/utils";
 
 type LogoProps = {
     className?: string;
+    textClassName?: string;
 };
 
-export function Logo({ className }: LogoProps) {
+export function Logo({ className, textClassName }: LogoProps) {
     return (
         <div className={cn("flex items-center gap-0", className)}>
             <Image
@@ -17,7 +18,7 @@ export function Logo({ className }: LogoProps) {
                 className="object-contain"
                 priority
             />
-            <div className="ml-2">
+            <div className={cn("ml-2", textClassName)}>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                     MonySaver
                 </p>
