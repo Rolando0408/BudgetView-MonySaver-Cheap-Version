@@ -76,7 +76,7 @@ export function SignupForm({
 
       // Supabase puede no lanzar error si la cuenta existe sin identidades nuevas.
       // Patrón recomendado: user.identities.length === 0 => correo ya está registrado.
-      const identities = (data as any)?.user?.identities
+      const identities = data.user?.identities
       if (Array.isArray(identities) && identities.length === 0) {
         setError(
           "Este correo ya está registrado. Inicia sesión o recupera tu contraseña."

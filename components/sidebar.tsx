@@ -52,7 +52,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           return
         }
         resolveName(user?.user_metadata?.name, user?.email)
-      } catch (_error) {
+      } catch {
         if (!active) return
         setDisplayName("")
       }
