@@ -911,7 +911,7 @@ export default function DashboardPage() {
             <CardTitle>Tendencia de gastos e ingresos</CardTitle>
             <CardDescription>Comparativo diario de los últimos días en el rango seleccionado.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[320px]">
+          <CardContent className="h-80">
             {loading ? (
               <div className="flex h-full items-center justify-center">
                 <Loader2 className="size-6 animate-spin text-muted-foreground" />
