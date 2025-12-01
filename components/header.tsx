@@ -319,7 +319,7 @@ export function Header({
                 className
             )}
         >
-            <Logo />
+            <Logo className="w-10"/>
 
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
                 <div className="rounded-2xl border bg-background/60 px-6 py-2 text-center shadow-xs">
