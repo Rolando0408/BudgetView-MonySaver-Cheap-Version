@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react"
-import { ChevronDown, Loader2, Wallet2 } from "lucide-react"
+import { ChevronDown, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabaseClient"
+import { Logo } from "@/components/logo";
 
 type TransactionBalanceRow = {
     monto: number | string | null
@@ -318,15 +319,7 @@ export function Header({
                 className
             )}
         >
-            <div className="flex items-center gap-3">
-                <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Wallet2 className="size-6" />
-                </div>
-                <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{tagline}</p>
-                    <p className="text-2xl font-semibold leading-tight tracking-tight">{appName}</p>
-                </div>
-            </div>
+            <Logo />
 
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
                 <div className="rounded-2xl border bg-background/60 px-6 py-2 text-center shadow-xs">
