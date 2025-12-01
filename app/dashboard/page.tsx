@@ -38,6 +38,7 @@ import {
   YAxis,
   Legend,
 } from "recharts"
+import type { PieLabelRenderProps } from "recharts"
 
 type TransactionType = "gasto" | "ingreso"
 
@@ -110,6 +111,8 @@ const PERIOD_BUTTONS: Array<{ label: string; value: PeriodFilter }> = [
 
 const PIE_COLORS = ["#F97316", "#6366F1", "#EC4899", "#0EA5E9", "#22C55E", "#FACC15", "#8B5CF6"]
 
+const RADIAN = Math.PI / 180
+
 const currencyFormatter = new Intl.NumberFormat("es-ES", {
   style: "currency",
   currency: "USD",
@@ -166,6 +169,50 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "")
+}
+
+function getMonthKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth()}`
+}
+
+function getMonthKeyFromISO(value: string | null) {
+  if (!value) return null
+  const [year, month] = value.split("-")
+  const yearNum = Number(year)
+  const monthIndex = Number(month) - 1
+  if (!Number.isFinite(yearNum) || !Number.isFinite(monthIndex)) {
+    return null
+  }
+  return `${yearNum}-${monthIndex}`
+}
+
+function renderPieLabel(props: PieLabelRenderProps) {
+  const {
+    cx = 0,
+    cy = 0,
+    midAngle = 0,
+    outerRadius = 0,
+    percent = 0,
+  } = props
+
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+  const radius = outerRadius + 18
+  const x = cx + radius * Math.cos(-midAngle * RADIAN)
+  const y = cy + radius * Math.sin(-midAngle * RADIAN)
+  const displayPercent = `${(percent * 100).toFixed(1)}%`
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="var(--foreground)"
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      style={{ fontSize: "0.75rem", fontWeight: 600 }}
+    >
+      {displayPercent}
+    </text>
+  )
 }
 
 export default function DashboardPage() {
@@ -236,11 +283,7 @@ export default function DashboardPage() {
         }
 
         const categoryRecord = Array.isArray(row.categorias) ? row.categorias[0] : row.categorias
-        const periodDate = row.periodo ? new Date(row.periodo) : null
-        const periodKey =
-          periodDate && !Number.isNaN(periodDate.getTime())
-            ? `${periodDate.getFullYear()}-${periodDate.getMonth()}`
-            : null
+        const periodKey = getMonthKeyFromISO(row.periodo)
 
         return {
           id: row.id,
@@ -549,29 +592,53 @@ export default function DashboardPage() {
     return buckets
   }, [filteredTransactions, periodFilter, customStartDate, customEndDate])
 
-  const selectedPeriodKey = React.useMemo(() => {
+  const selectedMonthKey = React.useMemo(() => {
     const { start } = getRangeForFilter(periodFilter, customStartDate, customEndDate)
     const reference = start ?? customStartDate ?? customEndDate ?? new Date()
-    return `${reference.getFullYear()}-${reference.getMonth()}`
+    return getMonthKey(reference)
   }, [periodFilter, customStartDate, customEndDate])
 
-  const activeBudgets = React.useMemo<BudgetConfig[]>(() => {
+  const monthlyBudgets = React.useMemo(() => {
     if (budgets.length === 0) {
       return []
     }
 
-    const filtered = budgets.filter((budget) => {
-      if (!budget.periodKey || !selectedPeriodKey) {
-        return true
+    const scoped = budgets.filter((budget) => budget.periodKey === selectedMonthKey)
+    if (scoped.length > 0) {
+      return scoped
+    }
+
+    return budgets.filter((budget) => !budget.periodKey)
+  }, [budgets, selectedMonthKey])
+
+  const consolidatedBudgets = React.useMemo(() => {
+    if (monthlyBudgets.length === 0) {
+      return []
+    }
+
+    const grouped = new Map<string, BudgetConfig>()
+
+    monthlyBudgets.forEach((budget) => {
+      const key = budget.categoryId ?? budget.label.toLowerCase()
+      const existing = grouped.get(key)
+      if (!existing) {
+        grouped.set(key, budget)
+        return
       }
-      return budget.periodKey === selectedPeriodKey
+
+      const existingTime = existing.period ? new Date(existing.period).getTime() : Number.NEGATIVE_INFINITY
+      const candidateTime = budget.period ? new Date(budget.period).getTime() : Number.NEGATIVE_INFINITY
+
+      if (candidateTime >= existingTime) {
+        grouped.set(key, budget)
+      }
     })
 
-    return filtered.length > 0 ? filtered : budgets
-  }, [budgets, selectedPeriodKey])
+    return Array.from(grouped.values())
+  }, [monthlyBudgets])
 
   const budgetAlerts = React.useMemo<BudgetAlert[]>(() => {
-    if (activeBudgets.length === 0) {
+    if (consolidatedBudgets.length === 0) {
       return []
     }
 
@@ -588,7 +655,7 @@ export default function DashboardPage() {
       expenseTotalsByLabel.set(labelKey, (expenseTotalsByLabel.get(labelKey) ?? 0) + tx.amount)
     })
 
-    return activeBudgets.map((config) => {
+    return consolidatedBudgets.map((config) => {
       const spentById = config.categoryId ? expenseTotalsById.get(config.categoryId) : undefined
       const spentByLabel = expenseTotalsByLabel.get(config.label.toLowerCase())
       const spent = spentById ?? spentByLabel ?? 0
@@ -607,7 +674,7 @@ export default function DashboardPage() {
         status,
       }
     })
-  }, [filteredTransactions, activeBudgets])
+  }, [filteredTransactions, consolidatedBudgets])
 
   return (
     <div className="space-y-6">
@@ -803,26 +870,25 @@ export default function DashboardPage() {
                         data={expenseChartData}
                         dataKey="value"
                         nameKey="slice"
-                        innerRadius={70}
+                        innerRadius={0}
                         outerRadius={110}
                         paddingAngle={2}
                         stroke="var(--card)"
-                        strokeWidth={2}
+                        strokeWidth={1}
+                        label={renderPieLabel}
+                        labelLine={false}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartContainer>
-                <div className="mt-4 grid gap-2">
+                <div className="mt-4 flex flex-wrap gap-3 text-sm">
                   {expenseBreakdown.slice(0, 5).map((entry, index) => (
-                    <div key={`${entry.name}-${index}`} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="size-2.5 rounded-full"
-                          style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
-                        />
-                        <span className="font-medium text-foreground/90">{entry.name}</span>
-                      </div>
-                      <span className="text-muted-foreground">{entry.percentage.toFixed(1)}%</span>
+                    <div key={`${entry.name}-${index}`} className="flex items-center gap-2">
+                      <span
+                        className="size-2.5 rounded-full"
+                        style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                      />
+                      <span className="font-medium text-foreground/90">{entry.name}</span>
                     </div>
                   ))}
                 </div>
@@ -908,7 +974,7 @@ export default function DashboardPage() {
                   danger: "text-red-600 bg-red-500/15 dark:text-red-200 dark:bg-red-500/20",
                 }
 
-                const progress = Math.min(alert.percentage, 150)
+                const progress = Math.min(alert.percentage, 100)
 
                 return (
                   <div key={alert.id} className="space-y-2 rounded-xl border p-4">
