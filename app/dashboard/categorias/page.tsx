@@ -89,16 +89,16 @@ const currencyFormatter = new Intl.NumberFormat("es-ES", {
 
 const categoryCardStyles: Record<CategorySection, { card: string; value: string; badge: string; bar: string }> = {
   gasto: {
-    card: "border border-red-200 bg-red-50 dark:bg-background dark:border-red-500/60",
-    value: "text-red-600 dark:text-red-300",
-    badge: "bg-red-500/15 text-red-600 dark:bg-red-500/20 dark:text-red-200",
-    bar: "bg-red-500 dark:bg-red-500/60",
+    card: "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+    value: "text-red-700 dark:text-red-200",
+    badge: "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-200",
+    bar: "bg-red-500 dark:bg-red-400",
   },
   ingreso: {
-    card: "border border-emerald-200 bg-emerald-50 dark:bg-background dark:border-emerald-500/60",
-    value: "text-emerald-600 dark:text-emerald-300",
-    badge: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200",
-    bar: "bg-emerald-500 dark:bg-emerald-500/60",
+    card: "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+    value: "text-emerald-700 dark:text-emerald-200",
+    badge: "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200",
+    bar: "bg-emerald-500 dark:bg-emerald-400",
   },
 }
 
@@ -496,7 +496,7 @@ export default function CategoriasPage() {
       value: currencyFormatter.format(totals.expenses),
       icon: ArrowDownCircle,
       accent:
-        "border border-red-100 bg-red-50 text-red-600 dark:bg-background dark:border-red-500/60 dark:text-red-300",
+        "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
       iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
     },
     {
@@ -504,7 +504,7 @@ export default function CategoriasPage() {
       value: currencyFormatter.format(totals.income),
       icon: ArrowUpCircle,
       accent:
-        "border border-emerald-100 bg-emerald-50 text-emerald-600 dark:bg-background dark:border-emerald-500/60 dark:text-emerald-300",
+        "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
       iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
     },
     {
@@ -512,7 +512,7 @@ export default function CategoriasPage() {
       value: totals.categories.toString(),
       icon: BarChart3,
       accent:
-        "border border-blue-100 bg-blue-50 text-blue-600 dark:bg-background dark:border-blue-500/60 dark:text-blue-300",
+        "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
       iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
     },
   ]
@@ -619,7 +619,7 @@ export default function CategoriasPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {summaryCards.map(({ title, value, icon: Icon, accent, iconStyles }) => (
-          <Card key={title} className={accent}>
+          <Card key={title} className={cn("border bg-linear-to-br shadow-sm", accent)}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{title}</CardTitle>
               <span className={cn("flex size-12 items-center justify-center rounded-full", iconStyles)}>
@@ -670,7 +670,13 @@ export default function CategoriasPage() {
                   const isDeleting = actionPendingId === category.id
 
                   return (
-                    <Card key={`${type}-${category.id}`} className={styles.card}>
+                    <Card
+                      key={`${type}-${category.id}`}
+                      className={cn(
+                        "border bg-linear-to-br shadow-sm transition-shadow hover:shadow-md",
+                        styles.card
+                      )}
+                    >
                       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                         <div className="space-y-1">
                           <CardTitle

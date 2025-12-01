@@ -545,29 +545,40 @@ export default function PresupuestosPage() {
       title: "Presupuesto Total",
       value: currencyFormatter.format(summary.totalBudget),
       icon: PiggyBank,
-      accent: "from-blue-100/80 to-white text-blue-700 border-blue-200",
+      accent:
+        "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
+      iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
     },
     {
       title: "Gastado",
       value: currencyFormatter.format(summary.totalSpent),
       icon: TrendingDown,
-      accent: "from-red-100/80 to-white text-red-600 border-red-200",
+      accent:
+        "from-red-100/80 to-white text-red-600 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+      iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
     },
     {
       title: "Disponible",
       value: currencyFormatter.format(summary.available),
       icon: CircleDollarSign,
       accent: summary.available >= 0
-        ? "from-emerald-100/80 to-white text-emerald-600 border-emerald-200"
-        : "from-red-100/80 to-white text-red-600 border-red-200",
+        ? "from-emerald-100/80 to-white text-emerald-600 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40"
+        : "from-red-100/80 to-white text-red-600 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+      iconStyles: summary.available >= 0
+        ? "bg-emerald-500 text-white dark:bg-emerald-500/60"
+        : "bg-red-500 text-white dark:bg-red-500/60",
     },
     {
       title: "Estado",
       value: `${summary.controlCount} en control · ${summary.exceededCount} excedidos`,
       icon: summary.exceededCount > 0 ? AlertTriangle : CheckCircle2,
       accent: summary.exceededCount > 0
-        ? "from-purple-100/80 to-white text-purple-600 border-purple-200"
-        : "from-emerald-100/80 to-white text-emerald-600 border-emerald-200",
+        ? "from-purple-100/80 to-white text-purple-600 border-purple-200 dark:from-purple-500/10 dark:to-slate-950 dark:text-purple-200 dark:border-purple-500/40"
+        : "from-emerald-100/80 to-white text-emerald-600 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+      iconStyles: summary.exceededCount > 0
+        ? "bg-purple-500 text-white dark:bg-purple-500/60"
+        : "bg-emerald-500 text-white dark:bg-emerald-500/60",
+      valueClassName: "text-xl",
     },
   ]
 
@@ -612,7 +623,7 @@ export default function PresupuestosPage() {
               </PopoverContent>
             </Popover>
           </div>
-          <Button type="button" onClick={handleOpenDialog} className="h-11 gap-2">
+          <Button type="button" onClick={handleOpenDialog} className="h-11 gap-2 mt-4.5">
             <Plus className="size-4" />
             Nuevo Presupuesto
           </Button>
@@ -632,16 +643,18 @@ export default function PresupuestosPage() {
             <Card
               key={card.title}
               className={cn(
-                "border bg-linear-to-br shadow-sm",
+                "h-35.5 border bg-linear-to-br shadow-sm transition-shadow hover:shadow-md",
                 card.accent
               )}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                <Icon className="size-5" />
+                <span className={cn("flex size-12 items-center justify-center rounded-full", card.iconStyles)}>
+                  <Icon className="size-5" />
+                </span>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold tracking-tight">{card.value}</p>
+                <p className={cn("font-semibold tracking-tight", card.valueClassName ?? "text-3xl")}>{card.value}</p>
               </CardContent>
             </Card>
           )

@@ -482,7 +482,7 @@ export default function TransaccionesPage() {
                     variant={formTipo === "ingreso" ? "default" : "outline"}
                     className={cn(
                       "h-12 text-base font-medium",
-                      formTipo === "ingreso" && "bg-background text-foreground hover:bg-accent"
+                      formTipo === "ingreso" && "bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
                     )}
                     onClick={() => {
                       setFormTipo("ingreso")
