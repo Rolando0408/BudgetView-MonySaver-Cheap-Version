@@ -4,13 +4,14 @@ import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Wallet, FolderKanban, PiggyBank, Download, ChevronLeft, ChevronRight, User2, LogOut } from "lucide-react"
+import { LayoutDashboard, Wallet, FolderKanban, PiggyBank, Download, ChevronLeft, ChevronRight, User2, LogOut, CreditCard } from "lucide-react"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { supabase } from "@/lib/supabaseClient"
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/transacciones", label: "Transacciones", icon: Wallet },
+  { href: "/dashboard/transacciones", label: "Transacciones", icon: CreditCard },
+  { href: "/dashboard/billeteras", label: "Billeteras", icon: Wallet },
   { href: "/dashboard/categorias", label: "Categorías", icon: FolderKanban },
   { href: "/dashboard/presupuestos", label: "Presupuestos", icon: PiggyBank },
   { href: "/dashboard/exportar", label: "Exportar", icon: Download },
@@ -173,7 +174,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           )
         })}
       </div>
-      <div className="relative mt-37 text-xs text-muted-foreground">
+      <div className="relative mt-25 text-xs text-muted-foreground">
         <Button
           ref={triggerRef}
           type="button"

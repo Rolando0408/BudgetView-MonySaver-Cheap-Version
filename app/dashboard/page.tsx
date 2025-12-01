@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Activity,
   AlertTriangle,
@@ -10,6 +11,7 @@ import {
   Loader2,
   PiggyBank,
   TrendingUp,
+  Wallet,
 } from "lucide-react"
 import { format, subDays, eachDayOfInterval } from "date-fns"
 import { es } from "date-fns/locale"
@@ -39,6 +41,7 @@ import {
   Legend,
 } from "recharts"
 import type { PieLabelRenderProps } from "recharts"
+import { GLOBAL_WALLET_ID } from "@/lib/wallets"
 
 type TransactionType = "gasto" | "ingreso"
 
@@ -234,8 +237,11 @@ export default function DashboardPage() {
     const query = supabase
       .from("transacciones")
       .select("id,monto,tipo,fecha_transaccion,categorias(id,nombre)")
-      .eq("billetera_id", activeWallet)
       .order("fecha_transaccion", { ascending: false })
+
+    if (activeWallet !== GLOBAL_WALLET_ID) {
+      query.eq("billetera_id", activeWallet)
+    }
 
     const { data, error } = await query
     if (error) {
@@ -316,13 +322,11 @@ export default function DashboardPage() {
         }
 
         const rows = (data ?? []) as Array<{ id: string }>
-        if (rows.length === 0) {
-          setWalletId(null)
-          return
-        }
-
         const stored = typeof window !== "undefined" ? window.localStorage.getItem("dashboard.activeWalletId") : null
-        const resolved = stored && rows.some((wallet) => wallet.id === stored) ? stored : rows[0].id
+        const resolved =
+          stored && (stored === GLOBAL_WALLET_ID || rows.some((wallet) => wallet.id === stored))
+            ? stored
+            : rows[0]?.id ?? GLOBAL_WALLET_ID
         setWalletId(resolved)
       } catch (walletErr) {
         if (!active) return
@@ -457,7 +461,11 @@ export default function DashboardPage() {
     let cancelled = false
     const handleTransactionsUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ walletId?: string }>).detail
-      if (detail?.walletId && detail.walletId !== walletId) {
+      if (
+        walletId !== GLOBAL_WALLET_ID &&
+        detail?.walletId &&
+        detail.walletId !== walletId
+      ) {
         return
       }
 
@@ -678,11 +686,19 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Resumen general</h1>
-        <p className="text-muted-foreground text-sm">
-          Visualiza tus ingresos, gastos y el desempeño de tus presupuestos.
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Resumen general</h1>
+          <p className="text-muted-foreground text-sm">
+            Visualiza tus ingresos, gastos y el desempeño de tus presupuestos.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="w-full gap-2 md:w-auto">
+          <Link href="/dashboard/billeteras" className="inline-flex items-center gap-2">
+            <Wallet className="size-4" />
+            Gestionar billeteras
+          </Link>
+        </Button>
       </div>
 
       {walletError && (

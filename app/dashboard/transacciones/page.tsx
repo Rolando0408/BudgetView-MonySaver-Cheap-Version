@@ -20,6 +20,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { GLOBAL_WALLET_ID } from "@/lib/wallets"
 
 type TransactionType = "gasto" | "ingreso"
 
@@ -64,6 +65,7 @@ export default function TransaccionesPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
+  const [amountError, setAmountError] = React.useState<string | null>(null)
   const [periodFilter, setPeriodFilter] = React.useState<PeriodFilter>("thisMonth")
   const [billeteraId, setBilleteraId] = React.useState<string | null>(null)
   
@@ -75,8 +77,9 @@ export default function TransaccionesPage() {
   const [formMonto, setFormMonto] = React.useState("")
   const [formTipo, setFormTipo] = React.useState<TransactionType>("gasto")
   const [formCategoriaId, setFormCategoriaId] = React.useState("")
+  const isGlobalWallet = billeteraId === GLOBAL_WALLET_ID
 
-  // Load user's first wallet
+  // Load user's preferred wallet and sync with header selection
   React.useEffect(() => {
     let active = true
 
@@ -86,38 +89,69 @@ export default function TransaccionesPage() {
           .from("billeteras")
           .select("id")
           .order("nombre", { ascending: true })
-          .limit(1)
-          .single()
 
         if (!active) return
         if (error) throw error
-        if (data) {
-          setBilleteraId(data.id)
-        }
+
+        const walletRows = (data ?? []) as Array<{ id: string }>
+
+        const storedWalletId =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("dashboard.activeWalletId")
+            : null
+
+        const resolvedWalletId =
+          storedWalletId &&
+          (storedWalletId === GLOBAL_WALLET_ID || walletRows.some((wallet) => wallet.id === storedWalletId))
+            ? storedWalletId
+            : walletRows[0]?.id ?? GLOBAL_WALLET_ID
+
+        setBilleteraId(resolvedWalletId)
       } catch (err) {
         if (!active) return
         console.error("Error al cargar billetera", err)
+        setBilleteraId(GLOBAL_WALLET_ID)
       }
     }
 
+    const handleWalletChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ walletId?: string }>).detail
+      if (!detail?.walletId) return
+      setBilleteraId(detail.walletId)
+    }
+
     loadWallet()
+    window.addEventListener("wallet:changed", handleWalletChanged as EventListener)
 
     return () => {
       active = false
+      window.removeEventListener("wallet:changed", handleWalletChanged as EventListener)
     }
   }, [])
 
   const loadData = React.useCallback(async (signal?: AbortSignal) => {
     if (signal?.aborted) return
 
+    if (!billeteraId) {
+      setTransactions([])
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
+      let transactionsQuery = supabase
+        .from("transacciones")
+        .select("id, monto, tipo, descripcion, fecha_transaccion, categoria_id, categorias(id, nombre, tipo)")
+        .order("fecha_transaccion", { ascending: false })
+
+      if (billeteraId !== GLOBAL_WALLET_ID) {
+        transactionsQuery = transactionsQuery.eq("billetera_id", billeteraId)
+      }
+
       const [transactionsResult, categoriesResult] = await Promise.all([
-        supabase
-          .from("transacciones")
-          .select("id, monto, tipo, descripcion, fecha_transaccion, categoria_id, categorias(id, nombre, tipo)")
-          .order("fecha_transaccion", { ascending: false }),
+        transactionsQuery,
         supabase.from("categorias").select("id, nombre, tipo"),
       ])
 
@@ -148,7 +182,7 @@ export default function TransaccionesPage() {
         setLoading(false)
       }
     }
-  }, [])
+  }, [billeteraId])
 
   React.useEffect(() => {
     const controller = new AbortController()
@@ -216,7 +250,24 @@ export default function TransaccionesPage() {
     setFormTipo("gasto")
     setFormCategoriaId("")
     setFormError(null)
+    setAmountError(null)
   }, [])
+
+  const handleMontoChange = (value: string) => {
+    setFormMonto(value)
+
+    if (!value) {
+      setAmountError("Ingresa un monto mayor a 0.")
+      return
+    }
+
+    const parsed = parseFloat(value)
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      setAmountError("El monto debe ser mayor a 0.")
+    } else {
+      setAmountError(null)
+    }
+  }
 
   const handleSubmitTransaction = React.useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -233,8 +284,8 @@ export default function TransaccionesPage() {
         return
       }
 
-      if (!billeteraId) {
-        setFormError("No tienes una billetera configurada. Crea una billetera primero.")
+      if (!billeteraId || billeteraId === GLOBAL_WALLET_ID) {
+        setFormError("Selecciona una billetera específica desde el encabezado para registrar transacciones.")
         return
       }
 
@@ -453,6 +504,11 @@ export default function TransaccionesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
+            {isGlobalWallet && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                Estás en modo <span className="font-semibold">Global</span>. Selecciona una billetera específica en el encabezado para registrar nuevas transacciones.
+              </div>
+            )}
             <form className="flex h-full flex-col gap-4" onSubmit={handleSubmitTransaction}>
               <div className="flex-1 space-y-4 overflow-y-auto pr-1">
               {/* Tipo */}
@@ -473,7 +529,7 @@ export default function TransaccionesPage() {
                       setFormTipo("gasto")
                       setFormCategoriaId("")
                     }}
-                    disabled={saving}
+                    disabled={saving || isGlobalWallet}
                   >
                     Gasto
                   </Button>
@@ -488,7 +544,7 @@ export default function TransaccionesPage() {
                       setFormTipo("ingreso")
                       setFormCategoriaId("")
                     }}
-                    disabled={saving}
+                    disabled={saving || isGlobalWallet}
                   >
                     Ingreso
                   </Button>
@@ -508,14 +564,21 @@ export default function TransaccionesPage() {
                     id="transaction-monto"
                     type="number"
                     step="0.01"
+                    min="0.01"
                     placeholder="0.00"
                     value={formMonto}
-                    onChange={(event) => setFormMonto(event.target.value)}
-                    disabled={saving}
+                    onChange={(event) => handleMontoChange(event.target.value)}
+                    disabled={saving || isGlobalWallet}
                     required
                     className="pl-7 h-12 text-base bg-muted/50"
+                    aria-invalid={amountError ? "true" : undefined}
                   />
                 </div>
+                {amountError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {amountError}
+                  </p>
+                )}
               </div>
 
               {/* Categoría */}
@@ -526,7 +589,7 @@ export default function TransaccionesPage() {
                 <Select
                   value={formCategoriaId || undefined}
                   onValueChange={setFormCategoriaId}
-                  disabled={saving || filteredCategories.length === 0}
+                  disabled={saving || isGlobalWallet || filteredCategories.length === 0}
                 >
                   <SelectTrigger
                     id="transaction-categoria"
@@ -558,7 +621,7 @@ export default function TransaccionesPage() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                disabled={saving}
+                disabled={saving || isGlobalWallet || !!amountError}
                 className="w-full h-12 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
               >
                 {saving ? (

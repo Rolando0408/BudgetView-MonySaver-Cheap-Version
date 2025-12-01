@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabaseClient"
+import { GLOBAL_WALLET_ID, GLOBAL_WALLET_LABEL } from "@/lib/wallets"
 import { Logo } from "@/components/logo";
 
 type TransactionBalanceRow = {
@@ -67,7 +68,7 @@ export function Header({
         if (typeof window === "undefined") return
         try {
             window.localStorage.setItem("dashboard.activeWalletId", value)
-        } catch (_error) {
+        } catch {
             // Ignore storage failures (private mode, etc.)
         }
 
@@ -120,18 +121,31 @@ export function Header({
                     name: (wallet.nombre ?? "Billetera sin nombre").trim() || "Billetera sin nombre",
                 }))
 
-                setWallets(records)
+                const availableWallets: WalletOption[] = [
+                    { id: GLOBAL_WALLET_ID, name: GLOBAL_WALLET_LABEL },
+                    ...records,
+                ]
+
+                let storedWalletId: string | null = null
+                if (typeof window !== "undefined") {
+                    try {
+                        storedWalletId = window.localStorage.getItem("dashboard.activeWalletId")
+                    } catch {
+                        storedWalletId = null
+                    }
+                }
+
+                setWallets(availableWallets)
 
                 setWalletId((prev) => {
-                    if (selectedWallet && records.some((wallet) => wallet.id === selectedWallet)) {
-                        return selectedWallet
+                    const preferredOrder = [selectedWallet, prev, storedWalletId]
+                    for (const candidate of preferredOrder) {
+                        if (candidate && availableWallets.some((wallet) => wallet.id === candidate)) {
+                            return candidate
+                        }
                     }
 
-                    if (prev && records.some((wallet) => wallet.id === prev)) {
-                        return prev
-                    }
-
-                    return records.length > 0 ? records[0].id : null
+                    return availableWallets.length > 0 ? availableWallets[0].id : null
                 })
             } catch (error) {
                 if (!active) return
@@ -157,10 +171,15 @@ export function Header({
             return null
         }
 
-        const { data, error } = await supabase
+        const query = supabase
             .from("transacciones")
             .select("monto,tipo")
-            .eq("billetera_id", walletId)
+
+        if (walletId !== GLOBAL_WALLET_ID) {
+            query.eq("billetera_id", walletId)
+        }
+
+        const { data, error } = await query
 
         if (error) {
             throw error
@@ -225,7 +244,11 @@ export function Header({
         const handleTransactionsUpdated = (event: Event) => {
             if (!walletId) return
             const customEvent = event as CustomEvent<{ walletId?: string }>
-            if (customEvent.detail?.walletId && customEvent.detail.walletId !== walletId) {
+            if (
+                walletId !== GLOBAL_WALLET_ID &&
+                customEvent.detail?.walletId &&
+                customEvent.detail.walletId !== walletId
+            ) {
                 return
             }
 
@@ -254,15 +277,25 @@ export function Header({
         }
 
         const channel = supabase
-            .channel(`transacciones-balance-${walletId}`)
+            .channel(
+                walletId === GLOBAL_WALLET_ID
+                    ? "transacciones-balance-global"
+                    : `transacciones-balance-${walletId}`
+            )
             .on(
                 "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "transacciones",
-                    filter: `billetera_id=eq.${walletId}`,
-                },
+                walletId === GLOBAL_WALLET_ID
+                    ? {
+                        event: "*",
+                        schema: "public",
+                        table: "transacciones",
+                    }
+                    : {
+                        event: "*",
+                        schema: "public",
+                        table: "transacciones",
+                        filter: `billetera_id=eq.${walletId}`,
+                    },
                 () => {
                     fetchBalance()
                         .then((total) => {
@@ -347,7 +380,7 @@ export function Header({
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
-                                className="h-9 w-35 justify-between rounded-xl border bg-background/80 px-4 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                                className="h-9 w-40 justify-between rounded-xl border bg-background/80 px-4 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                                 disabled={walletsLoading || wallets.length === 0}
                             >
                                 <span>{walletButtonLabel}</span>
