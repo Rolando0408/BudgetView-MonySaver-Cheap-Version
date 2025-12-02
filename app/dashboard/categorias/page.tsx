@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 
 type CategorySection = "gasto" | "ingreso"
 
@@ -87,18 +88,20 @@ const currencyFormatter = new Intl.NumberFormat("es-ES", {
   currency: "USD",
 })
 
+const NAME_MAX_LENGTH = 13
+
 const categoryCardStyles: Record<CategorySection, { card: string; value: string; badge: string; bar: string }> = {
   gasto: {
-    card: "border border-red-200 bg-red-50 dark:bg-background dark:border-red-500/60",
-    value: "text-red-600 dark:text-red-300",
-    badge: "bg-red-500/15 text-red-600 dark:bg-red-500/20 dark:text-red-200",
-    bar: "bg-red-500 dark:bg-red-500/60",
+    card: "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+    value: "text-red-700 dark:text-red-200",
+    badge: "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-200",
+    bar: "bg-red-500 dark:bg-red-400",
   },
   ingreso: {
-    card: "border border-emerald-200 bg-emerald-50 dark:bg-background dark:border-emerald-500/60",
-    value: "text-emerald-600 dark:text-emerald-300",
-    badge: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200",
-    bar: "bg-emerald-500 dark:bg-emerald-500/60",
+    card: "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+    value: "text-emerald-700 dark:text-emerald-200",
+    badge: "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200",
+    bar: "bg-emerald-500 dark:bg-emerald-400",
   },
 }
 
@@ -116,6 +119,20 @@ export default function CategoriasPage() {
   const [optionsOpenId, setOptionsOpenId] = React.useState<string | null>(null)
   const [editingCategoryId, setEditingCategoryId] = React.useState<string | null>(null)
   const [actionPendingId, setActionPendingId] = React.useState<string | null>(null)
+  const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+  const formatBcvAmount = React.useCallback(
+    (usdAmount: number) => {
+      if (!bcvRate || usdAmount === 0) {
+        return null
+      }
+      return formatCurrency(usdAmount * bcvRate, "VES")
+    },
+    [bcvRate]
+  )
+  const broadcastCategoriesUpdated = React.useCallback(() => {
+    if (typeof window === "undefined") return
+    window.dispatchEvent(new CustomEvent("categories:updated"))
+  }, [])
 
   const loadData = React.useCallback(
     async (signal?: AbortSignal) => {
@@ -372,6 +389,10 @@ export default function CategoriasPage() {
         setFormError("El nombre es obligatorio.")
         return
       }
+      if (trimmed.length > NAME_MAX_LENGTH) {
+        setFormError(`El nombre no puede tener más de ${NAME_MAX_LENGTH} caracteres.`)
+        return
+      }
 
       setSaving(true)
       setFormError(null)
@@ -398,6 +419,7 @@ export default function CategoriasPage() {
         setDialogOpen(false)
         setOptionsOpenId(null)
         await loadData()
+        broadcastCategoriesUpdated()
       } catch (submitError) {
         console.error(
           editingCategoryId ? "Error al actualizar categoría" : "Error al crear categoría",
@@ -412,7 +434,7 @@ export default function CategoriasPage() {
         setSaving(false)
       }
     },
-    [categoryName, categoryType, editingCategoryId, loadData, resetFormState]
+    [broadcastCategoriesUpdated, categoryName, categoryType, editingCategoryId, loadData, resetFormState]
   )
 
   const handleOpenEdit = React.useCallback(
@@ -475,6 +497,7 @@ export default function CategoriasPage() {
         }
 
         await loadData()
+        broadcastCategoriesUpdated()
       } catch (deleteError) {
         console.error("Error al eliminar categoría", deleteError)
         setError("No pudimos eliminar la categoría. Intenta nuevamente.")
@@ -482,7 +505,7 @@ export default function CategoriasPage() {
         setActionPendingId(null)
       }
     },
-    [dialogOpen, editingCategoryId, loadData, resetFormState]
+    [broadcastCategoriesUpdated, dialogOpen, editingCategoryId, loadData, resetFormState]
   )
 
   const categoryIdSet = React.useMemo(() => new Set(categoriesList.map((item) => item.id)), [
@@ -490,32 +513,37 @@ export default function CategoriasPage() {
   ])
   const isEditing = Boolean(editingCategoryId)
 
-  const summaryCards = [
-    {
-      title: "Total Gastos",
-      value: currencyFormatter.format(totals.expenses),
-      icon: ArrowDownCircle,
-      accent:
-        "border border-red-100 bg-red-50 text-red-600 dark:bg-background dark:border-red-500/60 dark:text-red-300",
-      iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
-    },
-    {
-      title: "Total Ingresos",
-      value: currencyFormatter.format(totals.income),
-      icon: ArrowUpCircle,
-      accent:
-        "border border-emerald-100 bg-emerald-50 text-emerald-600 dark:bg-background dark:border-emerald-500/60 dark:text-emerald-300",
-      iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
-    },
-    {
-      title: "Categorías Activas",
-      value: totals.categories.toString(),
-      icon: BarChart3,
-      accent:
-        "border border-blue-100 bg-blue-50 text-blue-600 dark:bg-background dark:border-blue-500/60 dark:text-blue-300",
-      iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
-    },
-  ]
+  const summaryCards = React.useMemo(
+    () => [
+      {
+        title: "Total Gastos",
+        value: currencyFormatter.format(totals.expenses),
+        bcvValue: formatBcvAmount(totals.expenses),
+        icon: ArrowDownCircle,
+        accent:
+          "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+        iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
+      },
+      {
+        title: "Total Ingresos",
+        value: currencyFormatter.format(totals.income),
+        bcvValue: formatBcvAmount(totals.income),
+        icon: ArrowUpCircle,
+        accent:
+          "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+        iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
+      },
+      {
+        title: "Categorías Activas",
+        value: totals.categories.toString(),
+        icon: BarChart3,
+        accent:
+          "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
+        iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
+      },
+    ],
+    [totals, formatBcvAmount]
+  )
 
   const sections: Array<{
     title: string
@@ -544,6 +572,13 @@ export default function CategoriasPage() {
           <h1 className="text-2xl font-semibold mb-1">Categorías</h1>
           <p className="text-muted-foreground text-sm">
             Revisa el comportamiento de tus categorías y crea nuevas según lo necesites.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {bcvLoading
+              ? "Cargando tasa BCV..."
+              : bcvRate
+              ? `1 US$ = ${formatCurrency(bcvRate, "VES")} (BCV)`
+              : "La tasa BCV no está disponible en este momento."}
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
@@ -579,7 +614,9 @@ export default function CategoriasPage() {
                   disabled={saving}
                   autoFocus
                   required
+                  maxLength={NAME_MAX_LENGTH}
                 />
+                <p className="text-xs text-muted-foreground">Máximo {NAME_MAX_LENGTH} caracteres.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category-type">Tipo</Label>
@@ -617,9 +654,15 @@ export default function CategoriasPage() {
         </div>
       )}
 
+      {bcvError && !bcvLoading && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+          {bcvError}
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {summaryCards.map(({ title, value, icon: Icon, accent, iconStyles }) => (
-          <Card key={title} className={accent}>
+        {summaryCards.map(({ title, value, bcvValue, icon: Icon, accent, iconStyles }) => (
+          <Card key={title} className={cn("border bg-linear-to-br shadow-sm", accent)}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{title}</CardTitle>
               <span className={cn("flex size-12 items-center justify-center rounded-full", iconStyles)}>
@@ -632,7 +675,12 @@ export default function CategoriasPage() {
                   <Loader2 className="size-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <p className="text-3xl font-semibold tracking-tight">{value}</p>
+                <>
+                  <p className="text-3xl font-semibold tracking-tight">{value}</p>
+                  {bcvValue && (
+                    <p className="text-xs text-muted-foreground">≈ {bcvValue} BCV</p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -668,9 +716,16 @@ export default function CategoriasPage() {
                     categoryIdSet.has(category.id) && !category.id.startsWith("sin-")
                   const isOptionOpen = optionsOpenId === category.id
                   const isDeleting = actionPendingId === category.id
+                  const categoryBcv = formatBcvAmount(category.total)
 
                   return (
-                    <Card key={`${type}-${category.id}`} className={styles.card}>
+                    <Card
+                      key={`${type}-${category.id}`}
+                      className={cn(
+                        "border bg-linear-to-br shadow-sm transition-shadow hover:shadow-md",
+                        styles.card
+                      )}
+                    >
                       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                         <div className="space-y-1">
                           <CardTitle
@@ -746,6 +801,9 @@ export default function CategoriasPage() {
                             {percentageLabel}
                           </span>
                         </div>
+                        {categoryBcv && (
+                          <p className="text-xs text-muted-foreground">≈ {categoryBcv} BCV</p>
+                        )}
                         <div className="text-xs text-muted-foreground">
                           Del total de {type === "gasto" ? "gastos" : "ingresos"}
                         </div>

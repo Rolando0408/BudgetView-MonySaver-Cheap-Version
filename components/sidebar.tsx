@@ -4,13 +4,42 @@ import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Wallet, FolderKanban, PiggyBank, Download, ChevronLeft, ChevronRight, User2, LogOut } from "lucide-react"
+import {
+  LayoutDashboard,
+  Wallet,
+  FolderKanban,
+  PiggyBank,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  User2,
+  LogOut,
+  CreditCard,
+  Menu,
+  CheckCircle2,
+  CircleAlert,
+  Loader2,
+} from "lucide-react"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { supabase } from "@/lib/supabaseClient"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/transacciones", label: "Transacciones", icon: Wallet },
+  { href: "/dashboard/transacciones", label: "Transacciones", icon: CreditCard },
+  { href: "/dashboard/billeteras", label: "Billeteras", icon: Wallet },
   { href: "/dashboard/categorias", label: "Categorías", icon: FolderKanban },
   { href: "/dashboard/presupuestos", label: "Presupuestos", icon: PiggyBank },
   { href: "/dashboard/exportar", label: "Exportar", icon: Download },
@@ -29,8 +58,12 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
   const [profileOpen, setProfileOpen] = React.useState(false)
   const [displayName, setDisplayName] = React.useState("")
   const [signingOut, setSigningOut] = React.useState(false)
+  const [signOutError, setSignOutError] = React.useState<string | null>(null)
+  const [signOutSuccess, setSignOutSuccess] = React.useState<string | null>(null)
+  const [signOutDialogOpen, setSignOutDialogOpen] = React.useState(false)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const dropdownRef = React.useRef<HTMLDivElement | null>(null)
+  const [mobileOpen, setMobileOpen] = React.useState(false)
 
   React.useEffect(() => {
     let active = true
@@ -52,7 +85,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           return
         }
         resolveName(user?.user_metadata?.name, user?.email)
-      } catch (_error) {
+      } catch {
         if (!active) return
         setDisplayName("")
       }
@@ -97,19 +130,41 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     }
   }, [profileOpen])
 
+  const closeSignOutDialog = React.useCallback(() => {
+    setSignOutDialogOpen(false)
+  }, [])
+
   const handleSignOut = React.useCallback(async () => {
     if (signingOut) return
+
     setSigningOut(true)
+    setSignOutError(null)
+    setSignOutSuccess(null)
     try {
       await supabase.auth.signOut()
       setProfileOpen(false)
-      router.push("/login")
+      setSignOutSuccess("Cerraste sesión correctamente.")
+      closeSignOutDialog()
+      window.setTimeout(() => router.push("/login"), 400)
     } catch (error) {
       console.error("Error al cerrar sesión", error)
+      setSignOutError("No pudimos cerrar sesión. Intenta nuevamente.")
     } finally {
       setSigningOut(false)
     }
-  }, [router, signingOut])
+  }, [router, signingOut, closeSignOutDialog])
+
+  React.useEffect(() => {
+    if (!signOutSuccess) return
+    const timeoutId = window.setTimeout(() => setSignOutSuccess(null), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [signOutSuccess])
+
+  React.useEffect(() => {
+    if (!signOutError) return
+    const timeoutId = window.setTimeout(() => setSignOutError(null), 5000)
+    return () => window.clearTimeout(timeoutId)
+  }, [signOutError])
 
   const accountLabel = displayName || "Cuenta"
 
@@ -125,31 +180,55 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     [onNavigate, pathname, router]
   )
 
-  return (
-    <aside
-      className={cn(
-        "sticky top-26 self-start flex max-h-svh flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-[width] duration-200 min-h-0 z-40",
-        collapsed ? "w-16" : "w-60",
-        className
-      )}
-    >
-      <div className="flex items-center gap-25">
-        {!collapsed && (
-          <span className="text-sm font-semibold tracking-tight">Budgetview</span>
+  const SidebarContent = ({
+    className: extraClassName,
+    forceExpanded = false,
+    showCollapseToggle = true,
+  }: {
+    className?: string
+    forceExpanded?: boolean
+    showCollapseToggle?: boolean
+  }) => {
+    const isCollapsed = forceExpanded ? false : collapsed
+
+    const onNavigateAndClose = (href: string) => {
+      handleNavigate(href)
+      if (forceExpanded) {
+        setMobileOpen(false)
+      }
+    }
+
+    return (
+      <aside
+        className={cn(
+          "flex max-h-[calc(100svh-5rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out min-h-0 sm:sticky sm:top-26 sm:self-start",
+          isCollapsed && !forceExpanded ? "w-16" : "w-60",
+          className,
+          extraClassName
         )}
-        <div className="flex items-center gap-1 ml-[0.2em]">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="rounded-full border bg-background/60"
-            onClick={() => setCollapsed((prev) => !prev)}
-            aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-          >
-            {collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
-          </Button>
+        style={{
+          width: forceExpanded ? "12rem" : undefined,
+        }}
+      >
+        <div className="flex items-center md:gap-35 lg:gap-35">
+          {!isCollapsed && (
+            <span className="text-sm font-semibold tracking-tight">Menú</span>
+          )}
+          {showCollapseToggle && (
+            <div className="flex items-center gap-1 ml-[0.2em] transition-opacity duration-300 ease-in-out">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="rounded-full border bg-background/60"
+                onClick={() => setCollapsed((prev) => !prev)}
+                aria-label={isCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+              >
+                {isCollapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
       <div className="h-px bg-border" />
       <div className="flex-1 min-h-0 space-y-1 overflow-auto">
         {items.map(({ href, label, icon: Icon }) => {
@@ -162,18 +241,18 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
               className={cn(
                 "w-full justify-start gap-2 rounded-lg",
                 active && "bg-primary text-primary-foreground hover:bg-primary/90",
-                collapsed && "px-0 justify-center"
+                isCollapsed && "px-0 justify-center"
               )}
-              onClick={() => handleNavigate(href)}
+              onClick={() => onNavigateAndClose(href)}
               disabled={navigating && !active}
             >
               <Icon className="size-4" />
-              {!collapsed && <span className="text-sm font-medium">{label}</span>}
+              {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
             </Button>
           )
         })}
       </div>
-      <div className="relative mt-37 text-xs text-muted-foreground">
+      <div className="relative top-50 md:top-0 md:mt-25 lg:top-0 lg:mt-25 text-xs text-muted-foreground">
         <Button
           ref={triggerRef}
           type="button"
@@ -181,14 +260,14 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           className={cn(
             "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors",
             profileOpen ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
-            collapsed && "justify-center px-0"
+            isCollapsed && "justify-center px-0"
           )}
           onClick={() => setProfileOpen((open) => !open)}
           aria-haspopup="listbox"
           aria-expanded={profileOpen}
         >
           <User2 className="size-4" />
-          {!collapsed && <span className="truncate">{accountLabel}</span>}
+          {!isCollapsed && <span className="truncate">{accountLabel}</span>}
         </Button>
         {profileOpen && (
           <div
@@ -197,7 +276,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
             aria-label="Opciones de perfil"
             className={cn(
               "ml-10 absolute z-50 w-32 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg divide-y divide-border",
-              collapsed
+              isCollapsed
                 ? "left-full top-2 ml-2 -translate-y-1/2 origin-left"
                 : "top-[-105] left-0 mt-2 origin-top"
             )}
@@ -212,8 +291,10 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
                 type="button"
                 variant="ghost"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={handleSignOut}
-                disabled={signingOut}
+                onClick={() => {
+                  setProfileOpen(false)
+                  setSignOutDialogOpen(true)
+                }}
               >
                 <LogOut className="size-4" />
                 <span>Cerrar sesión</span>
@@ -223,5 +304,82 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
         )}
       </div>
     </aside>
+    )
+  }
+
+  return (
+    <>
+      <FloatingAlertStack>
+        {signOutError && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>No pudimos cerrar sesión</AlertTitle>
+            <AlertDescription>{signOutError}</AlertDescription>
+          </Alert>
+        )}
+        {signOutSuccess && (
+          <Alert variant="success">
+            <CheckCircle2 className="size-4" aria-hidden />
+            <AlertTitle>Sesión cerrada</AlertTitle>
+            <AlertDescription>{signOutSuccess}</AlertDescription>
+          </Alert>
+        )}
+      </FloatingAlertStack>
+      <AlertDialog open={signOutDialogOpen} onOpenChange={(open) => (open ? setSignOutDialogOpen(true) : closeSignOutDialog())}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cerrar sesión?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cerrará tu sesión actual y volverás a la pantalla de acceso. Puedes iniciar sesión nuevamente cuando quieras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingOut} onClick={closeSignOutDialog}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {signingOut ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" /> Saliendo...
+                </>
+              ) : (
+                "Cerrar sesión"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div className="sm:hidden">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="fixed bottom-4 left-4 z-40 rounded-full shadow-lg"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menú"
+        >
+          <Menu className="size-5" />
+        </Button>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent className="h-full w-full max-w-48 p-0">
+            <div className="flex h-full flex-col overflow-hidden bg-card">
+              <SidebarContent
+                className="w-full rounded-none border-0 shadow-none"
+                forceExpanded
+                showCollapseToggle={false}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      <div className="hidden sm:block">
+        <SidebarContent />
+      </div>
+    </>
   )
 }

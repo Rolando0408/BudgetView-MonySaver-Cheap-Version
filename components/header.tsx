@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react"
-import { ChevronDown, Loader2, Wallet2 } from "lucide-react"
+import { ChevronDown, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,6 +12,9 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabaseClient"
+import { GLOBAL_WALLET_ID, GLOBAL_WALLET_LABEL } from "@/lib/wallets"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
+import { Logo } from "@/components/logo";
 
 type TransactionBalanceRow = {
     monto: number | string | null
@@ -38,21 +41,6 @@ type HeaderProps = {
     onWalletChange?: (walletId: string) => void
 }
 
-const currencyFormatters = new Map<string, Intl.NumberFormat>()
-function formatCurrency(value: number, currency: string) {
-    if (!currencyFormatters.has(currency)) {
-        currencyFormatters.set(
-            currency,
-            new Intl.NumberFormat("es-ES", {
-                style: "currency",
-                currency,
-                maximumFractionDigits: 2,
-            })
-        )
-    }
-    return currencyFormatters.get(currency)!.format(value)
-}
-
 export function Header({
     className,
     appName = "Budgetview",
@@ -62,6 +50,20 @@ export function Header({
     selectedWallet,
     onWalletChange,
 }: HeaderProps) {
+    const broadcastWalletChange = React.useCallback((value: string) => {
+        if (typeof window === "undefined") return
+        try {
+            window.localStorage.setItem("dashboard.activeWalletId", value)
+        } catch {
+            // Ignore storage failures (private mode, etc.)
+        }
+
+        window.dispatchEvent(
+            new CustomEvent("wallet:changed", {
+                detail: { walletId: value },
+            })
+        )
+    }, [])
 
     const [walletId, setWalletId] = React.useState<string | null>(selectedWallet ?? null)
     const [wallets, setWallets] = React.useState<WalletOption[]>([])
@@ -70,6 +72,7 @@ export function Header({
     const [balance, setBalance] = React.useState<number>(currentBalance)
     const [balanceLoading, setBalanceLoading] = React.useState(true)
     const [balanceError, setBalanceError] = React.useState<string | null>(null)
+    const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
 
     React.useEffect(() => {
         if (!selectedWallet) return
@@ -77,70 +80,93 @@ export function Header({
     }, [selectedWallet])
 
     React.useEffect(() => {
-        let active = true
+        if (!walletId) return
+        broadcastWalletChange(walletId)
+    }, [walletId, broadcastWalletChange])
 
-        const fetchWallets = async () => {
-            setWalletsLoading(true)
-            setWalletsError(null)
-            try {
-                const { data, error } = await supabase
-                    .from("billeteras")
-                    .select("id,nombre")
-                    .order("nombre", { ascending: true, nullsFirst: false })
+    const fetchWalletOptions = React.useCallback(async () => {
+        setWalletsLoading(true)
+        setWalletsError(null)
+        try {
+            const { data, error } = await supabase
+                .from("billeteras")
+                .select("id,nombre")
+                .order("nombre", { ascending: true, nullsFirst: false })
 
-                if (!active) return
+            if (error) {
+                throw error
+            }
 
-                if (error) {
-                    throw error
-                }
+            const rows = (data ?? []) as WalletRow[]
+            const records = rows.map((wallet) => ({
+                id: wallet.id,
+                name: (wallet.nombre ?? "Billetera sin nombre").trim() || "Billetera sin nombre",
+            }))
 
-                const rows = (data ?? []) as WalletRow[]
-                const records = rows.map((wallet) => ({
-                    id: wallet.id,
-                    name: (wallet.nombre ?? "Billetera sin nombre").trim() || "Billetera sin nombre",
-                }))
+            const availableWallets: WalletOption[] = [
+                { id: GLOBAL_WALLET_ID, name: GLOBAL_WALLET_LABEL },
+                ...records,
+            ]
 
-                setWallets(records)
-
-                setWalletId((prev) => {
-                    if (selectedWallet && records.some((wallet) => wallet.id === selectedWallet)) {
-                        return selectedWallet
-                    }
-
-                    if (prev && records.some((wallet) => wallet.id === prev)) {
-                        return prev
-                    }
-
-                    return records.length > 0 ? records[0].id : null
-                })
-            } catch (error) {
-                if (!active) return
-                console.error("Error al cargar billeteras", error)
-                setWallets([])
-                setWalletsError("No pudimos cargar tus billeteras.")
-            } finally {
-                if (active) {
-                    setWalletsLoading(false)
+            let storedWalletId: string | null = null
+            if (typeof window !== "undefined") {
+                try {
+                    storedWalletId = window.localStorage.getItem("dashboard.activeWalletId")
+                } catch {
+                    storedWalletId = null
                 }
             }
-        }
 
-        fetchWallets()
+            setWallets(availableWallets)
 
-        return () => {
-            active = false
+            setWalletId((prev) => {
+                const preferredOrder = [selectedWallet, prev, storedWalletId]
+                for (const candidate of preferredOrder) {
+                    if (candidate && availableWallets.some((wallet) => wallet.id === candidate)) {
+                        return candidate
+                    }
+                }
+
+                return availableWallets.length > 0 ? availableWallets[0].id : null
+            })
+        } catch (error) {
+            console.error("Error al cargar billeteras", error)
+            setWallets([])
+            setWalletsError("No pudimos cargar tus billeteras.")
+        } finally {
+            setWalletsLoading(false)
         }
     }, [selectedWallet])
+
+    React.useEffect(() => {
+        fetchWalletOptions()
+    }, [fetchWalletOptions])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        const handleWalletsUpdated = () => {
+            fetchWalletOptions()
+        }
+        window.addEventListener("wallets:updated", handleWalletsUpdated as EventListener)
+        return () => {
+            window.removeEventListener("wallets:updated", handleWalletsUpdated as EventListener)
+        }
+    }, [fetchWalletOptions])
 
     const fetchBalance = React.useCallback(async () => {
         if (!walletId) {
             return null
         }
 
-        const { data, error } = await supabase
+        const query = supabase
             .from("transacciones")
             .select("monto,tipo")
-            .eq("billetera_id", walletId)
+
+        if (walletId !== GLOBAL_WALLET_ID) {
+            query.eq("billetera_id", walletId)
+        }
+
+        const { data, error } = await query
 
         if (error) {
             throw error
@@ -205,7 +231,11 @@ export function Header({
         const handleTransactionsUpdated = (event: Event) => {
             if (!walletId) return
             const customEvent = event as CustomEvent<{ walletId?: string }>
-            if (customEvent.detail?.walletId && customEvent.detail.walletId !== walletId) {
+            if (
+                walletId !== GLOBAL_WALLET_ID &&
+                customEvent.detail?.walletId &&
+                customEvent.detail.walletId !== walletId
+            ) {
                 return
             }
 
@@ -234,15 +264,25 @@ export function Header({
         }
 
         const channel = supabase
-            .channel(`transacciones-balance-${walletId}`)
+            .channel(
+                walletId === GLOBAL_WALLET_ID
+                    ? "transacciones-balance-global"
+                    : `transacciones-balance-${walletId}`
+            )
             .on(
                 "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "transacciones",
-                    filter: `billetera_id=eq.${walletId}`,
-                },
+                walletId === GLOBAL_WALLET_ID
+                    ? {
+                        event: "*",
+                        schema: "public",
+                        table: "transacciones",
+                    }
+                    : {
+                        event: "*",
+                        schema: "public",
+                        table: "transacciones",
+                        filter: `billetera_id=eq.${walletId}`,
+                    },
                 () => {
                     fetchBalance()
                         .then((total) => {
@@ -285,6 +325,11 @@ export function Header({
         onWalletChange?.(value)
     }
 
+    const balanceInVES = React.useMemo(() => {
+        if (!bcvRate || balance <= 0) return null
+        return balance * bcvRate
+    }, [balance, bcvRate])
+
     const selectedWalletLabel = wallets.find((wallet) => wallet.id === walletId)?.name
     const walletButtonLabel = walletsLoading
         ? "Cargando billeteras..."
@@ -295,93 +340,170 @@ export function Header({
     return (
         <header
             className={cn(
-                "fixed top-0 left-0 right-0 z-50 flex w-full flex-col gap-4 border bg-card/80 py-2.5 px-8 shadow-sm backdrop-blur supports-backdrop-filter:bg-card/60 md:flex-row md:items-center md:justify-between",
+                "fixed top-0 left-0 right-0 z-50 border bg-card/80 px-4 py-2 shadow-sm backdrop-blur supports-backdrop-filter:bg-card/60 sm:px-6 md:px-8 md:py-2.5",
                 className
             )}
         >
-            <div className="flex items-center gap-3">
-                <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Wallet2 className="size-6" />
-                </div>
-                <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{tagline}</p>
-                    <p className="text-2xl font-semibold leading-tight tracking-tight">{appName}</p>
-                </div>
-            </div>
+            <div className="flex w-full items-center gap-3 overflow-x-auto sm:justify-between">
+                <Logo
+                    className="shrink-0"
+                    textClassName="hidden sm:block"
+                    title={appName}
+                    subtitle={tagline}
+                />
 
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
-                <div className="rounded-2xl border bg-background/60 px-6 py-2 text-center shadow-xs">
-                    <p className="text-xs uppercase tracking-widest text-muted-foreground">Saldo actual</p>
-                    {balanceLoading ? (
-                        <div className="flex h-10 items-center justify-center">
-                            <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : walletId ? (
-                        <p className="text-2xl font-semibold tracking-tight">{formatCurrency(balance, currency)}</p>
-                    ) : (
-                        <p className="text-xs text-muted-foreground">Selecciona una billetera para ver tu saldo.</p>
-                    )}
-                    {balanceError && !balanceLoading && (
-                        <p className="mt-1 text-xs font-medium text-destructive">{balanceError}</p>
-                    )}
-                </div>
-
-                <div className="flex flex-col gap-1">
-                    <label className="ml-1 mb-0.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                        Mi billetera
-                    </label>
-
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                className="h-9 w-35 justify-between rounded-xl border bg-background/80 px-4 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-                                disabled={walletsLoading || wallets.length === 0}
-                            >
-                                <span>{walletButtonLabel}</span>
-                                {walletsLoading ? (
-                                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                                ) : (
-                                    <span className="text-muted-foreground">
-                                        <ChevronDown className="size-4 text-muted-foreground" />
-                                    </span>
-                                )}
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-20">
-                            {walletsLoading ? (
-                                <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                                    <Loader2 className="size-4 animate-spin" />
-                                    Cargando billeteras...
-                                </div>
-                            ) : wallets.length === 0 ? (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">
-                                    No tienes billeteras registradas.
-                                </div>
+                <div className="flex flex-1 min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-6">
+                    <div className="flex w-full gap-2 sm:hidden">
+                        <div className="flex flex-1 flex-col rounded-xl border bg-background/60 px-3 py-1.5 text-center shadow-xs">
+                            <p className="text-[0.6rem] uppercase tracking-widest text-muted-foreground">Saldo</p>
+                            {balanceLoading ? (
+                                <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" />
+                            ) : walletId ? (
+                                <>
+                                    <p className="text-sm font-semibold tracking-tight">
+                                        {formatCurrency(balance, currency)}
+                                    </p>
+                                    {balanceInVES && (
+                                        <p className="text-[0.65rem] text-muted-foreground">
+                                            ≈ {formatCurrency(balanceInVES, "VES")}
+                                        </p>
+                                    )}
+                                </>
                             ) : (
-                                <DropdownMenuRadioGroup
-                                    value={walletId ?? ""}
-                                    onValueChange={handleWalletChange}
-                                >
-                                    {wallets.map((option) => (
-                                        <DropdownMenuRadioItem
-                                            key={option.id}
-                                            value={option.id}
-                                        >
-                                            {option.name}
-                                        </DropdownMenuRadioItem>
-                                    ))}
-                                </DropdownMenuRadioGroup>
+                                <p className="text-[0.65rem] text-muted-foreground">Selecciona una billetera</p>
                             )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                        </div>
 
-                    {walletsError && (
-                        <p className="text-xs font-medium text-destructive">{walletsError}</p>
-                    )}
-                    {!walletsError && !walletsLoading && wallets.length === 0 && (
-                        <p className="text-xs text-muted-foreground">Crea una billetera para comenzar.</p>
-                    )}
+                        <div className="flex flex-1 flex-col rounded-xl border bg-background/60 px-3 py-1.5 shadow-xs">
+                            <p className="text-[0.6rem] uppercase tracking-widest text-muted-foreground">Billetera</p>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-7 w-full justify-between px-0 text-xs font-semibold"
+                                        disabled={walletsLoading || wallets.length === 0}
+                                    >
+                                        <span className="truncate">{walletButtonLabel}</span>
+                                        {walletsLoading ? (
+                                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                                        ) : (
+                                            <ChevronDown className="size-3.5 text-muted-foreground" />
+                                        )}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-48">
+                                    {walletsLoading ? (
+                                        <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                                            <Loader2 className="size-4 animate-spin" />
+                                            Cargando billeteras...
+                                        </div>
+                                    ) : wallets.length === 0 ? (
+                                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                                            No tienes billeteras registradas.
+                                        </div>
+                                    ) : (
+                                        <DropdownMenuRadioGroup
+                                            value={walletId ?? ""}
+                                            onValueChange={handleWalletChange}
+                                        >
+                                            {wallets.map((option) => (
+                                                <DropdownMenuRadioItem
+                                                    key={option.id}
+                                                    value={option.id}
+                                                >
+                                                    {option.name}
+                                                </DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </div>
+
+                    <div className="hidden sm:block rounded-2xl border bg-background/60 px-6 py-2 text-center shadow-xs">
+                        <p className="text-xs uppercase tracking-widest text-muted-foreground">Saldo actual</p>
+                        {balanceLoading ? (
+                            <div className="flex h-10 items-center justify-center">
+                                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : walletId ? (
+                            <>
+                                <p className="text-md font-semibold tracking-tight">{formatCurrency(balance, currency)}</p>
+                                {balanceInVES && (
+                                    <p className="text-xs text-muted-foreground">
+                                        ≈ {formatCurrency(balanceInVES, "VES")} {bcvLoading ? "(actualizando...)" : "(BCV)"}
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <p className="text-xs text-muted-foreground">Selecciona una billetera para ver tu saldo.</p>
+                        )}
+                        {balanceError && !balanceLoading && (
+                            <p className="mt-1 text-xs font-medium text-destructive">{balanceError}</p>
+                        )}
+                        {bcvError && !bcvLoading && (
+                            <p className="mt-1 text-xs text-destructive">{bcvError}</p>
+                        )}
+                    </div>
+
+                    <div className="hidden w-full flex-col gap-1 sm:flex sm:w-auto">
+                        <label className="ml-1 mb-0.5 text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">
+                            Mi billetera
+                        </label>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="h-9 w-full justify-between rounded-xl border bg-background/80 px-4 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 sm:w-48"
+                                    disabled={walletsLoading || wallets.length === 0}
+                                >
+                                    <span className="truncate text-left">{walletButtonLabel}</span>
+                                    {walletsLoading ? (
+                                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                                    ) : (
+                                        <span className="text-muted-foreground">
+                                            <ChevronDown className="size-4 text-muted-foreground" />
+                                        </span>
+                                    )}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-48">
+                                {walletsLoading ? (
+                                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                                        <Loader2 className="size-4 animate-spin" />
+                                        Cargando billeteras...
+                                    </div>
+                                ) : wallets.length === 0 ? (
+                                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                                        No tienes billeteras registradas.
+                                    </div>
+                                ) : (
+                                    <DropdownMenuRadioGroup
+                                        value={walletId ?? ""}
+                                        onValueChange={handleWalletChange}
+                                    >
+                                        {wallets.map((option) => (
+                                            <DropdownMenuRadioItem
+                                                key={option.id}
+                                                value={option.id}
+                                            >
+                                                {option.name}
+                                            </DropdownMenuRadioItem>
+                                        ))}
+                                    </DropdownMenuRadioGroup>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {walletsError && (
+                            <p className="text-xs font-medium text-destructive">{walletsError}</p>
+                        )}
+                        {!walletsError && !walletsLoading && wallets.length === 0 && (
+                            <p className="text-xs text-muted-foreground">Crea una billetera para comenzar.</p>
+                        )}
+                    </div>
                 </div>
             </div>
         </header>
