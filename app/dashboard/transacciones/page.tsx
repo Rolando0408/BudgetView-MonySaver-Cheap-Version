@@ -584,9 +584,9 @@ export default function TransaccionesPage() {
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left Column - Registration Form */}
-        <Card className="flex h-155 flex-col">
+        <Card className="flex h-155 min-w-0 flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plus className="size-5" />
@@ -773,7 +773,7 @@ export default function TransaccionesPage() {
         </Card>
 
 
-        <Card className="flex h-155 flex-col">
+        <Card className="flex h-155 min-w-0 flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <History className="size-5" />
