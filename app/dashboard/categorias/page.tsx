@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 
 type CategorySection = "gasto" | "ingreso"
 
@@ -116,6 +117,16 @@ export default function CategoriasPage() {
   const [optionsOpenId, setOptionsOpenId] = React.useState<string | null>(null)
   const [editingCategoryId, setEditingCategoryId] = React.useState<string | null>(null)
   const [actionPendingId, setActionPendingId] = React.useState<string | null>(null)
+  const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+  const formatBcvAmount = React.useCallback(
+    (usdAmount: number) => {
+      if (!bcvRate || usdAmount === 0) {
+        return null
+      }
+      return formatCurrency(usdAmount * bcvRate, "VES")
+    },
+    [bcvRate]
+  )
 
   const loadData = React.useCallback(
     async (signal?: AbortSignal) => {
@@ -490,32 +501,37 @@ export default function CategoriasPage() {
   ])
   const isEditing = Boolean(editingCategoryId)
 
-  const summaryCards = [
-    {
-      title: "Total Gastos",
-      value: currencyFormatter.format(totals.expenses),
-      icon: ArrowDownCircle,
-      accent:
-        "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
-      iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
-    },
-    {
-      title: "Total Ingresos",
-      value: currencyFormatter.format(totals.income),
-      icon: ArrowUpCircle,
-      accent:
-        "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
-      iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
-    },
-    {
-      title: "Categorías Activas",
-      value: totals.categories.toString(),
-      icon: BarChart3,
-      accent:
-        "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
-      iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
-    },
-  ]
+  const summaryCards = React.useMemo(
+    () => [
+      {
+        title: "Total Gastos",
+        value: currencyFormatter.format(totals.expenses),
+        bcvValue: formatBcvAmount(totals.expenses),
+        icon: ArrowDownCircle,
+        accent:
+          "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+        iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
+      },
+      {
+        title: "Total Ingresos",
+        value: currencyFormatter.format(totals.income),
+        bcvValue: formatBcvAmount(totals.income),
+        icon: ArrowUpCircle,
+        accent:
+          "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+        iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
+      },
+      {
+        title: "Categorías Activas",
+        value: totals.categories.toString(),
+        icon: BarChart3,
+        accent:
+          "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
+        iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
+      },
+    ],
+    [totals, formatBcvAmount]
+  )
 
   const sections: Array<{
     title: string
@@ -544,6 +560,13 @@ export default function CategoriasPage() {
           <h1 className="text-2xl font-semibold mb-1">Categorías</h1>
           <p className="text-muted-foreground text-sm">
             Revisa el comportamiento de tus categorías y crea nuevas según lo necesites.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {bcvLoading
+              ? "Cargando tasa BCV..."
+              : bcvRate
+              ? `1 US$ = ${formatCurrency(bcvRate, "VES")} (BCV)`
+              : "La tasa BCV no está disponible en este momento."}
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
@@ -617,8 +640,14 @@ export default function CategoriasPage() {
         </div>
       )}
 
+      {bcvError && !bcvLoading && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+          {bcvError}
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {summaryCards.map(({ title, value, icon: Icon, accent, iconStyles }) => (
+        {summaryCards.map(({ title, value, bcvValue, icon: Icon, accent, iconStyles }) => (
           <Card key={title} className={cn("border bg-linear-to-br shadow-sm", accent)}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -632,7 +661,12 @@ export default function CategoriasPage() {
                   <Loader2 className="size-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <p className="text-3xl font-semibold tracking-tight">{value}</p>
+                <>
+                  <p className="text-3xl font-semibold tracking-tight">{value}</p>
+                  {bcvValue && (
+                    <p className="text-xs text-muted-foreground">≈ {bcvValue} BCV</p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -668,6 +702,7 @@ export default function CategoriasPage() {
                     categoryIdSet.has(category.id) && !category.id.startsWith("sin-")
                   const isOptionOpen = optionsOpenId === category.id
                   const isDeleting = actionPendingId === category.id
+                  const categoryBcv = formatBcvAmount(category.total)
 
                   return (
                     <Card
@@ -752,6 +787,9 @@ export default function CategoriasPage() {
                             {percentageLabel}
                           </span>
                         </div>
+                        {categoryBcv && (
+                          <p className="text-xs text-muted-foreground">≈ {categoryBcv} BCV</p>
+                        )}
                         <div className="text-xs text-muted-foreground">
                           Del total de {type === "gasto" ? "gastos" : "ingresos"}
                         </div>

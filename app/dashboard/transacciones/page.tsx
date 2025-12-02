@@ -20,6 +20,8 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { GLOBAL_WALLET_ID } from "@/lib/wallets"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 
 type TransactionType = "gasto" | "ingreso"
 
@@ -64,6 +66,7 @@ export default function TransaccionesPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
+  const [amountError, setAmountError] = React.useState<string | null>(null)
   const [periodFilter, setPeriodFilter] = React.useState<PeriodFilter>("thisMonth")
   const [billeteraId, setBilleteraId] = React.useState<string | null>(null)
   
@@ -75,8 +78,39 @@ export default function TransaccionesPage() {
   const [formMonto, setFormMonto] = React.useState("")
   const [formTipo, setFormTipo] = React.useState<TransactionType>("gasto")
   const [formCategoriaId, setFormCategoriaId] = React.useState("")
+  const [formDescripcion, setFormDescripcion] = React.useState("")
+  const [amountCurrency, setAmountCurrency] = React.useState<"USD" | "VES">("USD")
+  const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+  const formatBcvAmount = React.useCallback(
+    (usdAmount: number) => {
+      if (!bcvRate || usdAmount === 0) {
+        return null
+      }
+      return formatCurrency(usdAmount * bcvRate, "VES")
+    },
+    [bcvRate]
+  )
+  const isGlobalWallet = billeteraId === GLOBAL_WALLET_ID
+  const parsedAmount = React.useMemo(() => {
+    const parsed = parseFloat(formMonto)
+    return Number.isFinite(parsed) ? parsed : null
+  }, [formMonto])
+  const equivalentPreview = React.useMemo(() => {
+    if (!parsedAmount || parsedAmount <= 0 || !bcvRate || bcvRate <= 0) {
+      return null
+    }
 
-  // Load user's first wallet
+    if (amountCurrency === "USD") {
+      const vesText = formatCurrency(parsedAmount * bcvRate, "VES")
+      return `≈ ${vesText} BCV`
+    }
+
+    const usdText = currencyFormatter.format(parsedAmount / bcvRate)
+    return `≈ ${usdText} USD`
+  }, [parsedAmount, amountCurrency, bcvRate])
+  const canUseVesInput = Boolean(bcvRate && bcvRate > 0)
+
+  // Load user's preferred wallet and sync with header selection
   React.useEffect(() => {
     let active = true
 
@@ -86,38 +120,69 @@ export default function TransaccionesPage() {
           .from("billeteras")
           .select("id")
           .order("nombre", { ascending: true })
-          .limit(1)
-          .single()
 
         if (!active) return
         if (error) throw error
-        if (data) {
-          setBilleteraId(data.id)
-        }
+
+        const walletRows = (data ?? []) as Array<{ id: string }>
+
+        const storedWalletId =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("dashboard.activeWalletId")
+            : null
+
+        const resolvedWalletId =
+          storedWalletId &&
+          (storedWalletId === GLOBAL_WALLET_ID || walletRows.some((wallet) => wallet.id === storedWalletId))
+            ? storedWalletId
+            : walletRows[0]?.id ?? GLOBAL_WALLET_ID
+
+        setBilleteraId(resolvedWalletId)
       } catch (err) {
         if (!active) return
         console.error("Error al cargar billetera", err)
+        setBilleteraId(GLOBAL_WALLET_ID)
       }
     }
 
+    const handleWalletChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ walletId?: string }>).detail
+      if (!detail?.walletId) return
+      setBilleteraId(detail.walletId)
+    }
+
     loadWallet()
+    window.addEventListener("wallet:changed", handleWalletChanged as EventListener)
 
     return () => {
       active = false
+      window.removeEventListener("wallet:changed", handleWalletChanged as EventListener)
     }
   }, [])
 
   const loadData = React.useCallback(async (signal?: AbortSignal) => {
     if (signal?.aborted) return
 
+    if (!billeteraId) {
+      setTransactions([])
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
+      let transactionsQuery = supabase
+        .from("transacciones")
+        .select("id, monto, tipo, descripcion, fecha_transaccion, categoria_id, categorias(id, nombre, tipo)")
+        .order("fecha_transaccion", { ascending: false })
+
+      if (billeteraId !== GLOBAL_WALLET_ID) {
+        transactionsQuery = transactionsQuery.eq("billetera_id", billeteraId)
+      }
+
       const [transactionsResult, categoriesResult] = await Promise.all([
-        supabase
-          .from("transacciones")
-          .select("id, monto, tipo, descripcion, fecha_transaccion, categoria_id, categorias(id, nombre, tipo)")
-          .order("fecha_transaccion", { ascending: false }),
+        transactionsQuery,
         supabase.from("categorias").select("id, nombre, tipo"),
       ])
 
@@ -148,7 +213,7 @@ export default function TransaccionesPage() {
         setLoading(false)
       }
     }
-  }, [])
+  }, [billeteraId])
 
   React.useEffect(() => {
     const controller = new AbortController()
@@ -215,17 +280,78 @@ export default function TransaccionesPage() {
     setFormMonto("")
     setFormTipo("gasto")
     setFormCategoriaId("")
+    setFormDescripcion("")
     setFormError(null)
+    setAmountError(null)
+    setAmountCurrency("USD")
   }, [])
+
+  const handleCurrencyChange = React.useCallback(
+    (value: "USD" | "VES") => {
+      if (value === amountCurrency) {
+        return
+      }
+
+      if (!formMonto) {
+        setAmountCurrency(value)
+        setAmountError(null)
+        return
+      }
+
+      const parsed = parseFloat(formMonto)
+      if (Number.isNaN(parsed) || parsed <= 0 || !bcvRate || bcvRate <= 0) {
+        setAmountCurrency(value)
+        setAmountError(null)
+        return
+      }
+
+      const convertedValue = value === "USD" ? parsed / bcvRate : parsed * bcvRate
+      setFormMonto(convertedValue.toFixed(2))
+      setAmountCurrency(value)
+      setAmountError(null)
+    },
+    [amountCurrency, formMonto, bcvRate]
+  )
+
+  const handleMontoChange = (value: string) => {
+    setFormMonto(value)
+
+    if (!value) {
+      setAmountError("Ingresa un monto mayor a 0.")
+      return
+    }
+
+    const parsed = parseFloat(value)
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      setAmountError("El monto debe ser mayor a 0.")
+      return
+    }
+
+    if (amountCurrency === "VES" && !canUseVesInput) {
+      setAmountError("Necesitamos la tasa BCV para convertir tu monto.")
+      return
+    }
+
+    setAmountError(null)
+  }
 
   const handleSubmitTransaction = React.useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault()
 
-      const monto = parseFloat(formMonto)
-      if (isNaN(monto) || monto <= 0) {
+      const rawAmount = parseFloat(formMonto)
+      if (isNaN(rawAmount) || rawAmount <= 0) {
         setFormError("El monto debe ser un número mayor a 0.")
         return
+      }
+
+      let monto = rawAmount
+      if (amountCurrency === "VES") {
+        if (!bcvRate || bcvRate <= 0) {
+          setFormError("Necesitamos la tasa BCV para convertir tu monto.")
+          return
+        }
+        monto = rawAmount / bcvRate
       }
 
       if (!formCategoriaId) {
@@ -233,8 +359,8 @@ export default function TransaccionesPage() {
         return
       }
 
-      if (!billeteraId) {
-        setFormError("No tienes una billetera configurada. Crea una billetera primero.")
+      if (!billeteraId || billeteraId === GLOBAL_WALLET_ID) {
+        setFormError("Selecciona una billetera específica desde el encabezado para registrar transacciones.")
         return
       }
 
@@ -248,10 +374,12 @@ export default function TransaccionesPage() {
           return
         }
 
+        const descripcionValue = formDescripcion.trim() ? formDescripcion.trim() : null
+
         const transactionData = {
           monto,
           tipo: formTipo,
-          descripcion: null,
+          descripcion: descripcionValue,
           categoria_id: formCategoriaId,
           usuario_id: user.id,
           billetera_id: billeteraId,
@@ -275,7 +403,7 @@ export default function TransaccionesPage() {
         setSaving(false)
       }
     },
-    [formMonto, formTipo, formCategoriaId, billeteraId, loadData, resetFormState]
+    [formMonto, formTipo, formCategoriaId, formDescripcion, billeteraId, loadData, resetFormState, amountCurrency, bcvRate]
   )
 
   // Filter categories by type
@@ -298,11 +426,24 @@ export default function TransaccionesPage() {
         <p className="text-muted-foreground text-sm">
           Registra y administra tus ingresos y gastos.
         </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {bcvLoading
+            ? "Cargando tasa BCV..."
+            : bcvRate
+              ? `1 US$ = ${formatCurrency(bcvRate, "VES")} (BCV)`
+              : "La tasa BCV no está disponible en este momento."}
+        </p>
       </div>
 
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {bcvError && !bcvLoading && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+          {bcvError}
         </div>
       )}
 
@@ -445,7 +586,7 @@ export default function TransaccionesPage() {
       {/* Two Column Layout */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left Column - Registration Form */}
-        <Card className="flex h-115 flex-col">
+        <Card className="flex h-155 flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plus className="size-5" />
@@ -453,6 +594,11 @@ export default function TransaccionesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
+            {isGlobalWallet && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                Estás en modo <span className="font-semibold">Global</span>. Selecciona una billetera específica en el encabezado para registrar nuevas transacciones.
+              </div>
+            )}
             <form className="flex h-full flex-col gap-4" onSubmit={handleSubmitTransaction}>
               <div className="flex-1 space-y-4 overflow-y-auto pr-1">
               {/* Tipo */}
@@ -473,7 +619,7 @@ export default function TransaccionesPage() {
                       setFormTipo("gasto")
                       setFormCategoriaId("")
                     }}
-                    disabled={saving}
+                    disabled={saving || isGlobalWallet}
                   >
                     Gasto
                   </Button>
@@ -488,7 +634,7 @@ export default function TransaccionesPage() {
                       setFormTipo("ingreso")
                       setFormCategoriaId("")
                     }}
-                    disabled={saving}
+                    disabled={saving || isGlobalWallet}
                   >
                     Ingreso
                   </Button>
@@ -497,25 +643,55 @@ export default function TransaccionesPage() {
 
               {/* Monto */}
               <div className="space-y-2">
-                <Label htmlFor="transaction-monto" className="text-base font-semibold">
-                  Monto
-                </Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="transaction-monto" className="text-base font-semibold">
+                    Monto
+                  </Label>
+                  <Select
+                    value={amountCurrency}
+                    onValueChange={(value) => handleCurrencyChange(value as "USD" | "VES")}
+                    disabled={saving || isGlobalWallet}
+                  >
+                    <SelectTrigger className="h-9 w-30 bg-muted/50 text-sm" aria-label="Moneda del monto">
+                      <SelectValue placeholder="Moneda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD (US$)</SelectItem>
+                      <SelectItem value="VES" disabled={!canUseVesInput}>
+                        Bs (BCV)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    $
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                    {amountCurrency === "USD" ? "US$" : "Bs"}
                   </span>
                   <Input
                     id="transaction-monto"
                     type="number"
                     step="0.01"
+                    min="0.01"
                     placeholder="0.00"
                     value={formMonto}
-                    onChange={(event) => setFormMonto(event.target.value)}
-                    disabled={saving}
+                    onChange={(event) => handleMontoChange(event.target.value)}
+                    disabled={saving || isGlobalWallet}
                     required
-                    className="pl-7 h-12 text-base bg-muted/50"
+                    className="pl-12 h-12 text-base bg-muted/50"
+                    aria-invalid={amountError ? "true" : undefined}
                   />
                 </div>
+                {equivalentPreview && !amountError && (
+                  <p className="text-xs text-muted-foreground">{equivalentPreview}</p>
+                )}
+                {amountCurrency === "VES" && !canUseVesInput && (
+                  <p className="text-xs text-muted-foreground">La tasa BCV aún no está disponible.</p>
+                )}
+                {amountError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {amountError}
+                  </p>
+                )}
               </div>
 
               {/* Categoría */}
@@ -526,7 +702,7 @@ export default function TransaccionesPage() {
                 <Select
                   value={formCategoriaId || undefined}
                   onValueChange={setFormCategoriaId}
-                  disabled={saving || filteredCategories.length === 0}
+                  disabled={saving || isGlobalWallet || filteredCategories.length === 0}
                 >
                   <SelectTrigger
                     id="transaction-categoria"
@@ -552,13 +728,32 @@ export default function TransaccionesPage() {
                 </Select>
               </div>
 
+              {/* Descripción */}
+              <div className="space-y-2">
+                <Label htmlFor="transaction-descripcion" className="text-base font-semibold">
+                  Descripción <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                </Label>
+                <textarea
+                  id="transaction-descripcion"
+                  value={formDescripcion}
+                  onChange={(event) => setFormDescripcion(event.target.value)}
+                  disabled={saving || isGlobalWallet}
+                  placeholder="Agrega una nota breve"
+                  className="min-h-[88px] w-full rounded-md border border-input bg-muted/50 p-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  maxLength={280}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Se almacena junto a la transacción y te ayuda a recordar detalles.
+                </p>
+              </div>
+
                 {formError && <p className="text-sm text-destructive">{formError}</p>}
               </div>
 
               {/* Submit Button */}
               <Button
                 type="submit"
-                disabled={saving}
+                disabled={saving || isGlobalWallet || !!amountError}
                 className="w-full h-12 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
               >
                 {saving ? (
@@ -578,7 +773,7 @@ export default function TransaccionesPage() {
         </Card>
 
 
-        <Card className="flex h-115 flex-col">
+        <Card className="flex h-155 flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <History className="size-5" />
@@ -602,6 +797,7 @@ export default function TransaccionesPage() {
                   {filteredTransactions.map((transaction) => {
                   const isGasto = transaction.tipo === "gasto"
                   const categoryName = transaction.categorias?.nombre || "Sin categoría"
+                  const transactionBcv = formatBcvAmount(transaction.monto)
 
                   return (
                     <div
@@ -628,6 +824,11 @@ export default function TransaccionesPage() {
                           <p className="text-xs text-muted-foreground">
                             {dateFormatter.format(new Date(transaction.fecha_transaccion))}
                           </p>
+                          {transaction.descripcion && (
+                            <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                              {transaction.descripcion}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
@@ -652,6 +853,11 @@ export default function TransaccionesPage() {
                           {isGasto ? "-" : "+"}
                           {currencyFormatter.format(transaction.monto)}
                         </p>
+                        {transactionBcv && (
+                          <p className="text-xs text-muted-foreground">
+                            ≈ {transactionBcv} BCV
+                          </p>
+                        )}
                       </div>
                     </div>
                   )
