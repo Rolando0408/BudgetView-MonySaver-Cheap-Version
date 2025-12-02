@@ -64,6 +64,9 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const dropdownRef = React.useRef<HTMLDivElement | null>(null)
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [isDesktop, setIsDesktop] = React.useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 640px)").matches : false
+  )
 
   React.useEffect(() => {
     let active = true
@@ -130,6 +133,18 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     }
   }, [profileOpen])
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 640px)")
+    const update = () => setIsDesktop(mediaQuery.matches)
+    update()
+    mediaQuery.addEventListener("change", update)
+    return () => mediaQuery.removeEventListener("change", update)
+  }, [])
+
   const closeSignOutDialog = React.useCallback(() => {
     setSignOutDialogOpen(false)
   }, [])
@@ -190,6 +205,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     showCollapseToggle?: boolean
   }) => {
     const isCollapsed = forceExpanded ? false : collapsed
+    const isMobileView = forceExpanded
 
     const onNavigateAndClose = (href: string) => {
       handleNavigate(href)
@@ -201,7 +217,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     return (
       <aside
         className={cn(
-          "flex max-h-[calc(100svh-5rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out min-h-0 sm:sticky sm:top-26 sm:self-start",
+          "relative z-40 flex h-full min-h-[calc(100svh-5rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out sm:sticky sm:top-26 sm:self-start",
           isCollapsed && !forceExpanded ? "w-16" : "w-60",
           className,
           extraClassName
@@ -252,7 +268,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           )
         })}
       </div>
-      <div className="relative top-50 md:top-0 md:mt-25 lg:top-0 lg:mt-25 text-xs text-muted-foreground">
+      <div className="mt-auto pb-1 text-xs text-muted-foreground">
         <Button
           ref={triggerRef}
           type="button"
@@ -269,13 +285,43 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           <User2 className="size-4" />
           {!isCollapsed && <span className="truncate">{accountLabel}</span>}
         </Button>
-        {profileOpen && (
+        {profileOpen && isMobileView && (
+          <div
+            ref={dropdownRef}
+            role="listbox"
+            aria-label="Opciones de perfil"
+            className="mt-2 flex flex-col divide-y divide-border rounded-lg border bg-card text-card-foreground shadow-sm"
+          >
+            <div className="flex flex-col gap-0.5 p-1">
+              <ThemeToggle
+                className="h-9 w-full justify-center gap-0.5 rounded-md border-0 bg-transparent px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+              />
+            </div>
+            <div className="p-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => {
+                  setProfileOpen(false)
+                  setSignOutDialogOpen(true)
+                }}
+              >
+                <LogOut className="size-4" />
+                <span>Cerrar sesión</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {profileOpen && !isMobileView && (
           <div
             ref={dropdownRef}
             role="listbox"
             aria-label="Opciones de perfil"
             className={cn(
-              "ml-10 absolute z-50 w-32 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg divide-y divide-border",
+              "absolute z-50 overflow-hidden rounded-lg border shadow-lg divide-y divide-border",
+              "ml-10 w-32 bg-popover text-popover-foreground",
               isCollapsed
                 ? "left-full top-2 ml-2 -translate-y-1/2 origin-left"
                 : "top-[-105] left-0 mt-2 origin-top"
@@ -354,31 +400,35 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
         </AlertDialogContent>
       </AlertDialog>
       <div className="sm:hidden">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="fixed bottom-4 left-4 z-40 rounded-full shadow-lg"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Abrir menú"
-        >
-          <Menu className="size-5" />
-        </Button>
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent className="h-full w-full max-w-48 p-0">
-            <div className="flex h-full flex-col overflow-hidden bg-card">
-              <SidebarContent
-                className="w-full rounded-none border-0 shadow-none"
-                forceExpanded
-                showCollapseToggle={false}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
+        {!isDesktop && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="fixed bottom-4 left-4 z-40 rounded-full shadow-lg"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menú"
+            >
+              <Menu className="size-5" />
+            </Button>
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetContent className="h-full w-full max-w-48 p-0">
+                <div className="flex h-full flex-col overflow-visible bg-card">
+                  <SidebarContent
+                    className="w-full rounded-none border-0 shadow-none"
+                    forceExpanded
+                    showCollapseToggle={false}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </>
+        )}
       </div>
 
       <div className="hidden sm:block">
-        <SidebarContent />
+        {isDesktop && <SidebarContent />}
       </div>
     </>
   )
