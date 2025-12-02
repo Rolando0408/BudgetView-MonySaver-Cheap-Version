@@ -344,7 +344,7 @@ export function Header({
                 className
             )}
         >
-            <div className="flex w-full flex-wrap items-center gap-3 sm:flex-nowrap sm:justify-between">
+            <div className="flex w-full items-center gap-3 overflow-x-auto sm:justify-between">
                 <Logo
                     className="shrink-0"
                     textClassName="hidden sm:block"
@@ -352,7 +352,7 @@ export function Header({
                     subtitle={tagline}
                 />
 
-                <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-6">
+                <div className="flex flex-1 min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-6">
                     <div className="flex w-full gap-2 sm:hidden">
                         <div className="flex flex-1 flex-col rounded-xl border bg-background/60 px-3 py-1.5 text-center shadow-xs">
                             <p className="text-[0.6rem] uppercase tracking-widest text-muted-foreground">Saldo</p>
