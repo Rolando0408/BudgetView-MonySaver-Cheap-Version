@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
 import {
   Field,
   FieldDescription,
@@ -14,7 +16,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
-import { Loader2, ArrowLeft } from "lucide-react"
+import { Loader2, ArrowLeft, CircleAlert } from "lucide-react"
 
 export function SignupForm({
   className,
@@ -94,7 +96,17 @@ export function SignupForm({
   }
 
   return (
-    <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
+    <>
+      <FloatingAlertStack position="top-center">
+        {error && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>No pudimos crear tu cuenta</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </FloatingAlertStack>
+      <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
       <FieldGroup>
         <Field>
           <Button
@@ -176,17 +188,6 @@ export function SignupForm({
             )}
           </Button>
         </Field>
-        {error && (
-          <Field>
-            <FieldDescription
-              role="alert"
-              aria-live="polite"
-              className="text-destructive text-sm text-center"
-            >
-              {error}
-            </FieldDescription>
-          </Field>
-        )}
         <FieldSeparator>O continúa con</FieldSeparator>
         <Field>
           <Button variant="outline" type="button">
@@ -203,6 +204,7 @@ export function SignupForm({
           </FieldDescription>
         </Field>
       </FieldGroup>
-    </form>
+      </form>
+    </>
   )
 }

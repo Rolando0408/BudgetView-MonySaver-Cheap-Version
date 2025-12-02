@@ -4,6 +4,8 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
 import {
   Field,
   FieldError,
@@ -14,7 +16,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabaseClient"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle2, CircleAlert } from "lucide-react"
 
 export function LoginForm({
   className,
@@ -24,8 +26,18 @@ export function LoginForm({
   const [password, setPassword] = React.useState("")
   const [errors, setErrors] = React.useState<{ email?: string; password?: string }>({})
   const [authError, setAuthError] = React.useState<string | null>(null)
+  const [authSuccess, setAuthSuccess] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const redirectTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
+
+  React.useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current)
+      }
+    }
+  }, [])
 
   function validate(values: { email: string; password: string }) {
     const next: { email?: string; password?: string } = {}
@@ -48,6 +60,7 @@ export function LoginForm({
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setAuthError(null)
+    setAuthSuccess(null)
     const next = validate({ email, password })
     setErrors(next)
     if (Object.keys(next).length > 0) return
@@ -60,18 +73,42 @@ export function LoginForm({
       if (error) {
         setAuthError(error.message)
       } else {
-        router.push("/dashboard")
+        setAuthSuccess("Inicio de sesión exitoso. Redirigiéndote al panel principal...")
+        if (redirectTimeoutRef.current) {
+          clearTimeout(redirectTimeoutRef.current)
+        }
+        redirectTimeoutRef.current = setTimeout(() => {
+          router.push("/dashboard")
+        }, 750)
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error desconocido al iniciar sesión"
       setAuthError(message)
+      setAuthSuccess(null)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
+    <>
+      <FloatingAlertStack position="top-center">
+        {authError && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>Error al iniciar sesión</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
+        )}
+        {authSuccess && (
+          <Alert variant="success">
+            <CheckCircle2 className="size-4" aria-hidden />
+            <AlertTitle>Sesión iniciada</AlertTitle>
+            <AlertDescription>{authSuccess}</AlertDescription>
+          </Alert>
+        )}
+      </FloatingAlertStack>
+      <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">Inicia sesión en tu cuenta</h1>
@@ -79,11 +116,6 @@ export function LoginForm({
             Ingresa tus credenciales para acceder a tu cuenta.
           </p>
         </div>
-        {authError && (
-          <Field data-invalid>
-            <FieldError errors={[{ message: authError }]} />
-          </Field>
-        )}
         <Field data-invalid={!!errors.email}>
           <FieldLabel htmlFor="email">Correo</FieldLabel>
           <Input
@@ -145,6 +177,7 @@ export function LoginForm({
           </FieldDescription>
         </Field>
       </FieldGroup>
-    </form>
+      </form>
+    </>
   )
 }

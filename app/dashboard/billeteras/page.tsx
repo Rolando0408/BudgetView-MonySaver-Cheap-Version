@@ -6,6 +6,8 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Calendar as CalendarIcon,
+  CheckCircle2,
+  CircleAlert,
   DollarSign,
   Edit3,
   Loader2,
@@ -27,6 +29,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCurrency, useBcvRate } from "@/lib/currency"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const PERIOD_OPTIONS = [
   { label: "Últimos 7 días", value: "7days" },
@@ -34,6 +48,8 @@ const PERIOD_OPTIONS = [
   { label: "Mes pasado", value: "lastMonth" },
   { label: "Personalizado", value: "custom" },
 ] as const
+
+const NAME_MAX_LENGTH = 13
 
 const currencyFormatter = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -126,6 +142,10 @@ export default function BilleterasPage() {
   const [formError, setFormError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [actionPendingId, setActionPendingId] = React.useState<string | null>(null)
+  const [deleteError, setDeleteError] = React.useState<string | null>(null)
+  const [deleteSuccess, setDeleteSuccess] = React.useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [walletPendingDelete, setWalletPendingDelete] = React.useState<WalletSummary | null>(null)
   const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
   const formatBcvAmount = React.useCallback(
     (usdAmount: number) => {
@@ -136,6 +156,10 @@ export default function BilleterasPage() {
     },
     [bcvRate]
   )
+  const broadcastWalletsUpdated = React.useCallback(() => {
+    if (typeof window === "undefined") return
+    window.dispatchEvent(new CustomEvent("wallets:updated"))
+  }, [])
 
   const loadWallets = React.useCallback(
     async (signal?: AbortSignal) => {
@@ -303,6 +327,10 @@ export default function BilleterasPage() {
       setFormError("El nombre es obligatorio.")
       return
     }
+    if (trimmed.length > NAME_MAX_LENGTH) {
+      setFormError(`El nombre no puede tener más de ${NAME_MAX_LENGTH} caracteres.`)
+      return
+    }
 
     setSaving(true)
     setFormError(null)
@@ -333,6 +361,7 @@ export default function BilleterasPage() {
       setWalletName("")
       setEditingWalletId(null)
       await loadWallets()
+      broadcastWalletsUpdated()
     } catch (submitError) {
       console.error("Error al guardar billetera", submitError)
       setFormError("No pudimos guardar la billetera. Intenta nuevamente.")
@@ -341,39 +370,84 @@ export default function BilleterasPage() {
     }
   }
 
-  const handleDeleteWallet = async (wallet: WalletSummary) => {
-    const confirmed = window.confirm(
-      `¿Eliminar la billetera "${wallet.name}"? Esta acción no se puede deshacer.`
-    )
-    if (!confirmed) return
+  const promptDeleteWallet = React.useCallback((wallet: WalletSummary) => {
+    setWalletPendingDelete(wallet)
+    setDeleteDialogOpen(true)
+    setDeleteError(null)
+  }, [])
 
-    setActionPendingId(wallet.id)
+  const closeDeleteDialog = React.useCallback(() => {
+    setDeleteDialogOpen(false)
+    setWalletPendingDelete(null)
+  }, [])
+
+  const handleDeleteWallet = React.useCallback(async () => {
+    if (!walletPendingDelete) return
+
+    setActionPendingId(walletPendingDelete.id)
+    setDeleteError(null)
+    setDeleteSuccess(null)
     try {
       const { count, error: countError } = await supabase
         .from("transacciones")
         .select("id", { count: "exact", head: true })
-        .eq("billetera_id", wallet.id)
+        .eq("billetera_id", walletPendingDelete.id)
       if (countError) throw countError
 
       if ((count ?? 0) > 0) {
-        setError("No puedes eliminar una billetera con transacciones asociadas.")
+        setDeleteError("No puedes eliminar una billetera con transacciones asociadas.")
         return
       }
 
-      const { error: deleteError } = await supabase.from("billeteras").delete().eq("id", wallet.id)
+      const { error: deleteError } = await supabase
+        .from("billeteras")
+        .delete()
+        .eq("id", walletPendingDelete.id)
       if (deleteError) throw deleteError
 
       await loadWallets()
+      broadcastWalletsUpdated()
+      setDeleteSuccess(`La billetera "${walletPendingDelete.name}" se eliminó correctamente.`)
+      closeDeleteDialog()
     } catch (deleteError) {
       console.error("Error al eliminar billetera", deleteError)
-      setError("No pudimos eliminar la billetera. Intenta nuevamente.")
+      setDeleteError("No pudimos eliminar la billetera. Intenta nuevamente.")
     } finally {
       setActionPendingId(null)
     }
-  }
+  }, [walletPendingDelete, loadWallets, broadcastWalletsUpdated, closeDeleteDialog])
+
+  React.useEffect(() => {
+    if (!deleteSuccess) return
+    const timeoutId = window.setTimeout(() => setDeleteSuccess(null), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [deleteSuccess])
+
+  React.useEffect(() => {
+    if (!deleteError) return
+    const timeoutId = window.setTimeout(() => setDeleteError(null), 5000)
+    return () => window.clearTimeout(timeoutId)
+  }, [deleteError])
 
   return (
-    <div className="space-y-8">
+    <>
+      <FloatingAlertStack>
+        {deleteError && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>No pudimos completar la acción</AlertTitle>
+            <AlertDescription>{deleteError}</AlertDescription>
+          </Alert>
+        )}
+        {deleteSuccess && (
+          <Alert variant="success">
+            <CheckCircle2 className="size-4" aria-hidden />
+            <AlertTitle>Billetera eliminada</AlertTitle>
+            <AlertDescription>{deleteSuccess}</AlertDescription>
+          </Alert>
+        )}
+      </FloatingAlertStack>
+      <div className="space-y-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">Billeteras</p>
@@ -635,7 +709,7 @@ export default function BilleterasPage() {
                       type="button"
                       variant="destructive"
                       className="gap-2"
-                      onClick={() => handleDeleteWallet(wallet)}
+                      onClick={() => promptDeleteWallet(wallet)}
                       disabled={actionPendingId === wallet.id}
                     >
                       {actionPendingId === wallet.id ? (
@@ -675,7 +749,9 @@ export default function BilleterasPage() {
                 value={walletName}
                 onChange={(event) => setWalletName(event.target.value)}
                 disabled={saving}
+                maxLength={NAME_MAX_LENGTH}
               />
+              <p className="text-xs text-muted-foreground">Máximo {NAME_MAX_LENGTH} caracteres.</p>
             </div>
             {formError && <p className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>
@@ -689,6 +765,41 @@ export default function BilleterasPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => (open ? setDeleteDialogOpen(true) : closeDeleteDialog())}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar billetera</AlertDialogTitle>
+            <AlertDialogDescription>
+              {walletPendingDelete ? (
+                <>
+                  Vas a eliminar <span className="font-semibold text-foreground">{walletPendingDelete.name}</span>. Esta acción no se puede deshacer.
+                </>
+              ) : (
+                "Confirma si deseas eliminar esta billetera."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionPendingId !== null} onClick={closeDeleteDialog}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteWallet}
+              disabled={!walletPendingDelete || actionPendingId === walletPendingDelete.id}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {walletPendingDelete && actionPendingId === walletPendingDelete.id ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" /> Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </div>
+    </>
   )
 }

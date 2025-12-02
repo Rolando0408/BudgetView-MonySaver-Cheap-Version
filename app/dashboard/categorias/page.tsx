@@ -88,6 +88,8 @@ const currencyFormatter = new Intl.NumberFormat("es-ES", {
   currency: "USD",
 })
 
+const NAME_MAX_LENGTH = 13
+
 const categoryCardStyles: Record<CategorySection, { card: string; value: string; badge: string; bar: string }> = {
   gasto: {
     card: "from-red-100/80 to-white text-red-700 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
@@ -127,6 +129,10 @@ export default function CategoriasPage() {
     },
     [bcvRate]
   )
+  const broadcastCategoriesUpdated = React.useCallback(() => {
+    if (typeof window === "undefined") return
+    window.dispatchEvent(new CustomEvent("categories:updated"))
+  }, [])
 
   const loadData = React.useCallback(
     async (signal?: AbortSignal) => {
@@ -383,6 +389,10 @@ export default function CategoriasPage() {
         setFormError("El nombre es obligatorio.")
         return
       }
+      if (trimmed.length > NAME_MAX_LENGTH) {
+        setFormError(`El nombre no puede tener más de ${NAME_MAX_LENGTH} caracteres.`)
+        return
+      }
 
       setSaving(true)
       setFormError(null)
@@ -409,6 +419,7 @@ export default function CategoriasPage() {
         setDialogOpen(false)
         setOptionsOpenId(null)
         await loadData()
+        broadcastCategoriesUpdated()
       } catch (submitError) {
         console.error(
           editingCategoryId ? "Error al actualizar categoría" : "Error al crear categoría",
@@ -423,7 +434,7 @@ export default function CategoriasPage() {
         setSaving(false)
       }
     },
-    [categoryName, categoryType, editingCategoryId, loadData, resetFormState]
+    [broadcastCategoriesUpdated, categoryName, categoryType, editingCategoryId, loadData, resetFormState]
   )
 
   const handleOpenEdit = React.useCallback(
@@ -486,6 +497,7 @@ export default function CategoriasPage() {
         }
 
         await loadData()
+        broadcastCategoriesUpdated()
       } catch (deleteError) {
         console.error("Error al eliminar categoría", deleteError)
         setError("No pudimos eliminar la categoría. Intenta nuevamente.")
@@ -493,7 +505,7 @@ export default function CategoriasPage() {
         setActionPendingId(null)
       }
     },
-    [dialogOpen, editingCategoryId, loadData, resetFormState]
+    [broadcastCategoriesUpdated, dialogOpen, editingCategoryId, loadData, resetFormState]
   )
 
   const categoryIdSet = React.useMemo(() => new Set(categoriesList.map((item) => item.id)), [
@@ -602,7 +614,9 @@ export default function CategoriasPage() {
                   disabled={saving}
                   autoFocus
                   required
+                  maxLength={NAME_MAX_LENGTH}
                 />
+                <p className="text-xs text-muted-foreground">Máximo {NAME_MAX_LENGTH} caracteres.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category-type">Tipo</Label>

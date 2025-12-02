@@ -8,6 +8,10 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   History,
+  PenLine,
+  CheckCircle2,
+  CircleAlert,
+  AlertTriangle,
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -22,6 +26,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import { GLOBAL_WALLET_ID } from "@/lib/wallets"
 import { formatCurrency, useBcvRate } from "@/lib/currency"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
 
 type TransactionType = "gasto" | "ingreso"
 
@@ -66,6 +73,7 @@ export default function TransaccionesPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
+  const [formSuccess, setFormSuccess] = React.useState<string | null>(null)
   const [amountError, setAmountError] = React.useState<string | null>(null)
   const [periodFilter, setPeriodFilter] = React.useState<PeriodFilter>("thisMonth")
   const [billeteraId, setBilleteraId] = React.useState<string | null>(null)
@@ -81,6 +89,14 @@ export default function TransaccionesPage() {
   const [formDescripcion, setFormDescripcion] = React.useState("")
   const [amountCurrency, setAmountCurrency] = React.useState<"USD" | "VES">("USD")
   const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+  const [editingTransaction, setEditingTransaction] = React.useState<Transaction | null>(null)
+  const [editMonto, setEditMonto] = React.useState("")
+  const [editTipo, setEditTipo] = React.useState<TransactionType>("gasto")
+  const [editCategoriaId, setEditCategoriaId] = React.useState("")
+  const [editDescripcion, setEditDescripcion] = React.useState("")
+  const [editFecha, setEditFecha] = React.useState("")
+  const [editError, setEditError] = React.useState<string | null>(null)
+  const [editSaving, setEditSaving] = React.useState(false)
   const formatBcvAmount = React.useCallback(
     (usdAmount: number) => {
       if (!bcvRate || usdAmount === 0) {
@@ -109,6 +125,12 @@ export default function TransaccionesPage() {
     return `≈ ${usdText} USD`
   }, [parsedAmount, amountCurrency, bcvRate])
   const canUseVesInput = Boolean(bcvRate && bcvRate > 0)
+
+  React.useEffect(() => {
+    if (!formSuccess) return
+    const timeout = window.setTimeout(() => setFormSuccess(null), 4000)
+    return () => clearTimeout(timeout)
+  }, [formSuccess])
 
   // Load user's preferred wallet and sync with header selection
   React.useEffect(() => {
@@ -220,6 +242,17 @@ export default function TransaccionesPage() {
     loadData(controller.signal)
     return () => {
       controller.abort()
+    }
+  }, [loadData])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const handleCategoriesUpdated = () => {
+      loadData()
+    }
+    window.addEventListener("categories:updated", handleCategoriesUpdated as EventListener)
+    return () => {
+      window.removeEventListener("categories:updated", handleCategoriesUpdated as EventListener)
     }
   }, [loadData])
 
@@ -338,6 +371,7 @@ export default function TransaccionesPage() {
   const handleSubmitTransaction = React.useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault()
+      setFormSuccess(null)
 
       const rawAmount = parseFloat(formMonto)
       if (isNaN(rawAmount) || rawAmount <= 0) {
@@ -390,6 +424,7 @@ export default function TransaccionesPage() {
         if (insertError) throw insertError
 
         resetFormState()
+        setFormSuccess("Transacción registrada correctamente.")
         await loadData()
         window.dispatchEvent(
           new CustomEvent("transactions:updated", {
@@ -411,6 +446,10 @@ export default function TransaccionesPage() {
     return categories.filter((cat) => cat.tipo === formTipo)
   }, [categories, formTipo])
 
+  const editFilteredCategories = React.useMemo(() => {
+    return categories.filter((cat) => cat.tipo === editTipo)
+  }, [categories, editTipo])
+
   const periodButtons: Array<{ label: string; value: PeriodFilter }> = [
     { label: "Últimos 7 Días", value: "7days" },
     { label: "Este Mes", value: "thisMonth" },
@@ -418,8 +457,142 @@ export default function TransaccionesPage() {
     { label: "Personalizado", value: "custom" },
   ]
 
+  const resetEditState = React.useCallback(() => {
+    setEditingTransaction(null)
+    setEditMonto("")
+    setEditTipo("gasto")
+    setEditCategoriaId("")
+    setEditDescripcion("")
+    setEditFecha("")
+    setEditError(null)
+    setEditSaving(false)
+  }, [])
+
+  const handleStartEdit = React.useCallback((transaction: Transaction) => {
+    setEditingTransaction(transaction)
+    setEditMonto(transaction.monto.toFixed(2))
+    setEditTipo(transaction.tipo)
+    setEditCategoriaId(transaction.categoria_id ?? "")
+    setEditDescripcion(transaction.descripcion ?? "")
+    const isoDate = transaction.fecha_transaccion ? new Date(transaction.fecha_transaccion).toISOString().slice(0, 10) : ""
+    setEditFecha(isoDate)
+    setEditError(null)
+  }, [])
+
+  React.useEffect(() => {
+    if (!editingTransaction) return
+    const isValidCategory = editFilteredCategories.some((cat) => cat.id === editCategoriaId)
+    if (!isValidCategory) {
+      setEditCategoriaId("")
+    }
+  }, [editFilteredCategories, editCategoriaId, editingTransaction])
+
+  const handleEditSubmit = React.useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (!editingTransaction) return
+
+      const parsedAmount = parseFloat(editMonto)
+      if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+        setEditError("El monto debe ser mayor a 0.")
+        return
+      }
+
+      if (!editCategoriaId) {
+        setEditError("Selecciona una categoría válida.")
+        return
+      }
+
+      if (!editFecha) {
+        setEditError("Selecciona una fecha para la transacción.")
+        return
+      }
+
+      setEditSaving(true)
+      setEditError(null)
+      try {
+        const fechaIso = new Date(editFecha).toISOString()
+        const descripcionValue = editDescripcion.trim() ? editDescripcion.trim() : null
+
+        const { error: updateError } = await supabase
+          .from("transacciones")
+          .update({
+            monto: parsedAmount,
+            tipo: editTipo,
+            categoria_id: editCategoriaId,
+            descripcion: descripcionValue,
+            fecha_transaccion: fechaIso,
+          })
+          .eq("id", editingTransaction.id)
+
+        if (updateError) throw updateError
+
+        await loadData()
+        window.dispatchEvent(
+          new CustomEvent("transactions:updated", {
+            detail: { walletId: billeteraId ?? undefined },
+          })
+        )
+        resetEditState()
+      } catch (updateError) {
+        console.error("Error al actualizar transacción", updateError)
+        setEditError("No pudimos actualizar la transacción. Intenta nuevamente.")
+      } finally {
+        setEditSaving(false)
+      }
+    },
+    [billeteraId, editCategoriaId, editDescripcion, editFecha, editMonto, editTipo, editingTransaction, loadData, resetEditState]
+  )
+
   return (
-    <div className="space-y-6">
+    <>
+      <FloatingAlertStack>
+        {error && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>Ocurrió un problema</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {bcvError && !bcvLoading && (
+          <Alert variant="warning">
+            <AlertTriangle className="size-4" aria-hidden />
+            <AlertTitle>Tasa BCV no disponible</AlertTitle>
+            <AlertDescription>{bcvError}</AlertDescription>
+          </Alert>
+        )}
+        {isGlobalWallet && (
+          <Alert variant="warning">
+            <AlertTriangle className="size-4" aria-hidden />
+            <AlertTitle>Modo global activo</AlertTitle>
+            <AlertDescription>
+              Estás en modo <span className="font-semibold">Global</span>. Selecciona una billetera específica en el encabezado para registrar nuevas transacciones.
+            </AlertDescription>
+          </Alert>
+        )}
+        {formError && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>No pudimos guardar la transacción</AlertTitle>
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        )}
+        {formSuccess && (
+          <Alert variant="success">
+            <CheckCircle2 className="size-4" aria-hidden />
+            <AlertTitle>Transacción registrada</AlertTitle>
+            <AlertDescription>{formSuccess}</AlertDescription>
+          </Alert>
+        )}
+        {editError && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>No pudimos actualizar la transacción</AlertTitle>
+            <AlertDescription>{editError}</AlertDescription>
+          </Alert>
+        )}
+      </FloatingAlertStack>
+      <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold mb-1">Transacciones</h1>
@@ -434,18 +607,6 @@ export default function TransaccionesPage() {
               : "La tasa BCV no está disponible en este momento."}
         </p>
       </div>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {bcvError && !bcvLoading && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
-          {bcvError}
-        </div>
-      )}
 
       {/* Period Filter */}
       <div className="space-y-4">
@@ -594,11 +755,6 @@ export default function TransaccionesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
-            {isGlobalWallet && (
-              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                Estás en modo <span className="font-semibold">Global</span>. Selecciona una billetera específica en el encabezado para registrar nuevas transacciones.
-              </div>
-            )}
             <form className="flex h-full flex-col gap-4" onSubmit={handleSubmitTransaction}>
               <div className="flex-1 space-y-4 overflow-y-auto pr-1">
               {/* Tipo */}
@@ -747,7 +903,6 @@ export default function TransaccionesPage() {
                 </p>
               </div>
 
-                {formError && <p className="text-sm text-destructive">{formError}</p>}
               </div>
 
               {/* Submit Button */}
@@ -832,16 +987,28 @@ export default function TransaccionesPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                            isGasto
-                              ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
-                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                          )}
-                        >
-                          {isGasto ? "Gasto" : "Ingreso"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                              isGasto
+                                ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                            )}
+                          >
+                            {isGasto ? "Gasto" : "Ingreso"}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleStartEdit(transaction)}
+                            aria-label="Editar transacción"
+                          >
+                            <PenLine className="size-4" />
+                          </Button>
+                        </div>
                         <p
                           className={cn(
                             "text-base font-bold",
@@ -868,6 +1035,149 @@ export default function TransaccionesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={Boolean(editingTransaction)} onOpenChange={(open) => {
+        if (!open) {
+          resetEditState()
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar transacción</DialogTitle>
+            <DialogDescription>Actualiza la información de este movimiento y guarda los cambios.</DialogDescription>
+          </DialogHeader>
+          {editingTransaction && (
+            <form className="space-y-4" onSubmit={handleEditSubmit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Tipo</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      type="button"
+                      variant={editTipo === "gasto" ? "default" : "outline"}
+                      className={cn(
+                        "h-10 text-sm font-semibold",
+                        editTipo === "gasto" && "bg-red-600 hover:bg-red-700 text-white"
+                      )}
+                      onClick={() => {
+                        setEditTipo("gasto")
+                      }}
+                      disabled={editSaving}
+                    >
+                      Gasto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={editTipo === "ingreso" ? "default" : "outline"}
+                      className={cn(
+                        "h-10 text-sm font-semibold",
+                        editTipo === "ingreso" && "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      )}
+                      onClick={() => {
+                        setEditTipo("ingreso")
+                      }}
+                      disabled={editSaving}
+                    >
+                      Ingreso
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-monto" className="text-sm font-semibold">
+                    Monto (USD)
+                  </Label>
+                  <Input
+                    id="edit-monto"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editMonto}
+                    onChange={(event) => setEditMonto(event.target.value)}
+                    disabled={editSaving}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">El valor se guarda en dólares estadounidenses.</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-fecha" className="text-sm font-semibold">
+                    Fecha
+                  </Label>
+                  <Input
+                    id="edit-fecha"
+                    type="date"
+                    value={editFecha}
+                    onChange={(event) => setEditFecha(event.target.value)}
+                    disabled={editSaving}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-categoria" className="text-sm font-semibold">
+                    Categoría
+                  </Label>
+                  <Select
+                    value={editCategoriaId || undefined}
+                    onValueChange={setEditCategoriaId}
+                    disabled={editSaving || editFilteredCategories.length === 0}
+                  >
+                    <SelectTrigger id="edit-categoria">
+                      <SelectValue placeholder="Selecciona una categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editFilteredCategories.length === 0 ? (
+                        <SelectItem value="placeholder" disabled>
+                          {editTipo === "gasto"
+                            ? "No tienes categorías de gasto"
+                            : "No tienes categorías de ingreso"}
+                        </SelectItem>
+                      ) : (
+                        editFilteredCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.nombre || "Sin nombre"}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-descripcion" className="text-sm font-semibold">
+                  Descripción <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                </Label>
+                <textarea
+                  id="edit-descripcion"
+                  value={editDescripcion}
+                  onChange={(event) => setEditDescripcion(event.target.value)}
+                  disabled={editSaving}
+                  className="min-h-[88px] w-full rounded-md border border-input bg-muted/50 p-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  maxLength={280}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={resetEditState} disabled={editSaving}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={editSaving}>
+                  {editSaving ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" /> Guardando
+                    </>
+                  ) : (
+                    "Guardar cambios"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+    </>
   )
 }

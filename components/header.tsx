@@ -84,74 +84,74 @@ export function Header({
         broadcastWalletChange(walletId)
     }, [walletId, broadcastWalletChange])
 
-    React.useEffect(() => {
-        let active = true
+    const fetchWalletOptions = React.useCallback(async () => {
+        setWalletsLoading(true)
+        setWalletsError(null)
+        try {
+            const { data, error } = await supabase
+                .from("billeteras")
+                .select("id,nombre")
+                .order("nombre", { ascending: true, nullsFirst: false })
 
-        const fetchWallets = async () => {
-            setWalletsLoading(true)
-            setWalletsError(null)
-            try {
-                const { data, error } = await supabase
-                    .from("billeteras")
-                    .select("id,nombre")
-                    .order("nombre", { ascending: true, nullsFirst: false })
+            if (error) {
+                throw error
+            }
 
-                if (!active) return
+            const rows = (data ?? []) as WalletRow[]
+            const records = rows.map((wallet) => ({
+                id: wallet.id,
+                name: (wallet.nombre ?? "Billetera sin nombre").trim() || "Billetera sin nombre",
+            }))
 
-                if (error) {
-                    throw error
-                }
+            const availableWallets: WalletOption[] = [
+                { id: GLOBAL_WALLET_ID, name: GLOBAL_WALLET_LABEL },
+                ...records,
+            ]
 
-                const rows = (data ?? []) as WalletRow[]
-                const records = rows.map((wallet) => ({
-                    id: wallet.id,
-                    name: (wallet.nombre ?? "Billetera sin nombre").trim() || "Billetera sin nombre",
-                }))
-
-                const availableWallets: WalletOption[] = [
-                    { id: GLOBAL_WALLET_ID, name: GLOBAL_WALLET_LABEL },
-                    ...records,
-                ]
-
-                let storedWalletId: string | null = null
-                if (typeof window !== "undefined") {
-                    try {
-                        storedWalletId = window.localStorage.getItem("dashboard.activeWalletId")
-                    } catch {
-                        storedWalletId = null
-                    }
-                }
-
-                setWallets(availableWallets)
-
-                setWalletId((prev) => {
-                    const preferredOrder = [selectedWallet, prev, storedWalletId]
-                    for (const candidate of preferredOrder) {
-                        if (candidate && availableWallets.some((wallet) => wallet.id === candidate)) {
-                            return candidate
-                        }
-                    }
-
-                    return availableWallets.length > 0 ? availableWallets[0].id : null
-                })
-            } catch (error) {
-                if (!active) return
-                console.error("Error al cargar billeteras", error)
-                setWallets([])
-                setWalletsError("No pudimos cargar tus billeteras.")
-            } finally {
-                if (active) {
-                    setWalletsLoading(false)
+            let storedWalletId: string | null = null
+            if (typeof window !== "undefined") {
+                try {
+                    storedWalletId = window.localStorage.getItem("dashboard.activeWalletId")
+                } catch {
+                    storedWalletId = null
                 }
             }
-        }
 
-        fetchWallets()
+            setWallets(availableWallets)
 
-        return () => {
-            active = false
+            setWalletId((prev) => {
+                const preferredOrder = [selectedWallet, prev, storedWalletId]
+                for (const candidate of preferredOrder) {
+                    if (candidate && availableWallets.some((wallet) => wallet.id === candidate)) {
+                        return candidate
+                    }
+                }
+
+                return availableWallets.length > 0 ? availableWallets[0].id : null
+            })
+        } catch (error) {
+            console.error("Error al cargar billeteras", error)
+            setWallets([])
+            setWalletsError("No pudimos cargar tus billeteras.")
+        } finally {
+            setWalletsLoading(false)
         }
     }, [selectedWallet])
+
+    React.useEffect(() => {
+        fetchWalletOptions()
+    }, [fetchWalletOptions])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        const handleWalletsUpdated = () => {
+            fetchWalletOptions()
+        }
+        window.addEventListener("wallets:updated", handleWalletsUpdated as EventListener)
+        return () => {
+            window.removeEventListener("wallets:updated", handleWalletsUpdated as EventListener)
+        }
+    }, [fetchWalletOptions])
 
     const fetchBalance = React.useCallback(async () => {
         if (!walletId) {

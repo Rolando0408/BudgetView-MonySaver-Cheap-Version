@@ -4,10 +4,37 @@ import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Wallet, FolderKanban, PiggyBank, Download, ChevronLeft, ChevronRight, User2, LogOut, CreditCard, Menu } from "lucide-react"
+import {
+  LayoutDashboard,
+  Wallet,
+  FolderKanban,
+  PiggyBank,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  User2,
+  LogOut,
+  CreditCard,
+  Menu,
+  CheckCircle2,
+  CircleAlert,
+  Loader2,
+} from "lucide-react"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { supabase } from "@/lib/supabaseClient"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -31,6 +58,9 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
   const [profileOpen, setProfileOpen] = React.useState(false)
   const [displayName, setDisplayName] = React.useState("")
   const [signingOut, setSigningOut] = React.useState(false)
+  const [signOutError, setSignOutError] = React.useState<string | null>(null)
+  const [signOutSuccess, setSignOutSuccess] = React.useState<string | null>(null)
+  const [signOutDialogOpen, setSignOutDialogOpen] = React.useState(false)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const dropdownRef = React.useRef<HTMLDivElement | null>(null)
   const [mobileOpen, setMobileOpen] = React.useState(false)
@@ -100,19 +130,41 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     }
   }, [profileOpen])
 
+  const closeSignOutDialog = React.useCallback(() => {
+    setSignOutDialogOpen(false)
+  }, [])
+
   const handleSignOut = React.useCallback(async () => {
     if (signingOut) return
+
     setSigningOut(true)
+    setSignOutError(null)
+    setSignOutSuccess(null)
     try {
       await supabase.auth.signOut()
       setProfileOpen(false)
-      router.push("/login")
+      setSignOutSuccess("Cerraste sesión correctamente.")
+      closeSignOutDialog()
+      window.setTimeout(() => router.push("/login"), 400)
     } catch (error) {
       console.error("Error al cerrar sesión", error)
+      setSignOutError("No pudimos cerrar sesión. Intenta nuevamente.")
     } finally {
       setSigningOut(false)
     }
-  }, [router, signingOut])
+  }, [router, signingOut, closeSignOutDialog])
+
+  React.useEffect(() => {
+    if (!signOutSuccess) return
+    const timeoutId = window.setTimeout(() => setSignOutSuccess(null), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [signOutSuccess])
+
+  React.useEffect(() => {
+    if (!signOutError) return
+    const timeoutId = window.setTimeout(() => setSignOutError(null), 5000)
+    return () => window.clearTimeout(timeoutId)
+  }, [signOutError])
 
   const accountLabel = displayName || "Cuenta"
 
@@ -239,8 +291,10 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
                 type="button"
                 variant="ghost"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={handleSignOut}
-                disabled={signingOut}
+                onClick={() => {
+                  setProfileOpen(false)
+                  setSignOutDialogOpen(true)
+                }}
               >
                 <LogOut className="size-4" />
                 <span>Cerrar sesión</span>
@@ -255,6 +309,50 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
 
   return (
     <>
+      <FloatingAlertStack>
+        {signOutError && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" aria-hidden />
+            <AlertTitle>No pudimos cerrar sesión</AlertTitle>
+            <AlertDescription>{signOutError}</AlertDescription>
+          </Alert>
+        )}
+        {signOutSuccess && (
+          <Alert variant="success">
+            <CheckCircle2 className="size-4" aria-hidden />
+            <AlertTitle>Sesión cerrada</AlertTitle>
+            <AlertDescription>{signOutSuccess}</AlertDescription>
+          </Alert>
+        )}
+      </FloatingAlertStack>
+      <AlertDialog open={signOutDialogOpen} onOpenChange={(open) => (open ? setSignOutDialogOpen(true) : closeSignOutDialog())}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cerrar sesión?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cerrará tu sesión actual y volverás a la pantalla de acceso. Puedes iniciar sesión nuevamente cuando quieras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingOut} onClick={closeSignOutDialog}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {signingOut ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" /> Saliendo...
+                </>
+              ) : (
+                "Cerrar sesión"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="sm:hidden">
         <Button
           type="button"
