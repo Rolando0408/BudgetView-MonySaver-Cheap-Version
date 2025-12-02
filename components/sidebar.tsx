@@ -217,7 +217,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     return (
       <aside
         className={cn(
-          "relative z-40 flex h-full min-h-[calc(100svh-5rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out sm:sticky sm:top-26 sm:self-start",
+          "relative z-40 flex h-full sm:h-[calc(100svh-7.25rem)] lg:h-[calc(100svh-7.25rem)] md:h-[calc(100svh-7.25rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out sm:sticky sm:top-26 sm:self-start",
           isCollapsed && !forceExpanded ? "w-16" : "w-60",
           className,
           extraClassName
@@ -268,86 +268,88 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           )
         })}
       </div>
-      <div className="mt-auto pb-1 text-xs text-muted-foreground">
-        <Button
-          ref={triggerRef}
-          type="button"
-          variant="ghost"
-          className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors",
-            profileOpen ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
-            isCollapsed && "justify-center px-0"
-          )}
-          onClick={() => setProfileOpen((open) => !open)}
-          aria-haspopup="listbox"
-          aria-expanded={profileOpen}
-        >
-          <User2 className="size-4" />
-          {!isCollapsed && <span className="truncate">{accountLabel}</span>}
-        </Button>
-        {profileOpen && isMobileView && (
-          <div
-            ref={dropdownRef}
-            role="listbox"
-            aria-label="Opciones de perfil"
-            className="mt-2 flex flex-col divide-y divide-border rounded-lg border bg-card text-card-foreground shadow-sm"
-          >
-            <div className="flex flex-col gap-0.5 p-1">
-              <ThemeToggle
-                className="h-9 w-full justify-center gap-0.5 rounded-md border-0 bg-transparent px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-              />
-            </div>
-            <div className="p-1">
-              <Button
-                type="button"
-                variant="ghost"
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => {
-                  setProfileOpen(false)
-                  setSignOutDialogOpen(true)
-                }}
-              >
-                <LogOut className="size-4" />
-                <span>Cerrar sesión</span>
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {profileOpen && !isMobileView && (
-          <div
-            ref={dropdownRef}
-            role="listbox"
-            aria-label="Opciones de perfil"
+      <div className="mt-auto border-t border-border/70 pt-3">
+        <div className="relative text-xs text-muted-foreground">
+          <Button
+            ref={triggerRef}
+            type="button"
+            variant="ghost"
             className={cn(
-              "absolute z-50 overflow-hidden rounded-lg border shadow-lg divide-y divide-border",
-              "ml-10 w-32 bg-popover text-popover-foreground",
-              isCollapsed
-                ? "left-full top-2 ml-2 -translate-y-1/2 origin-left"
-                : "top-[-105] left-0 mt-2 origin-top"
+              "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors",
+              profileOpen ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
+              isCollapsed && "justify-center px-0"
             )}
+            onClick={() => setProfileOpen((open) => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={profileOpen}
           >
-            <div className="flex flex-col gap-0.5 p-1">
-              <ThemeToggle
-                className="h-9 w-full justify-center gap-0.5 rounded-md border-0 bg-transparent px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-              />
+            <User2 className="size-4" />
+            {!isCollapsed && <span className="truncate">{accountLabel}</span>}
+          </Button>
+          {profileOpen && isMobileView && (
+            <div
+              ref={dropdownRef}
+              role="listbox"
+              aria-label="Opciones de perfil"
+              className="mt-2 flex flex-col divide-y divide-border rounded-lg border bg-card text-card-foreground shadow-sm"
+            >
+              <div className="flex flex-col gap-0.5 p-1">
+                <ThemeToggle
+                  className="h-9 w-full justify-center gap-0.5 rounded-md border-0 bg-transparent px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                />
+              </div>
+              <div className="p-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    setProfileOpen(false)
+                    setSignOutDialogOpen(true)
+                  }}
+                >
+                  <LogOut className="size-4" />
+                  <span>Cerrar sesión</span>
+                </Button>
+              </div>
             </div>
-            <div className="p-1">
-              <Button
-                type="button"
-                variant="ghost"
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => {
-                  setProfileOpen(false)
-                  setSignOutDialogOpen(true)
-                }}
-              >
-                <LogOut className="size-4" />
-                <span>Cerrar sesión</span>
-              </Button>
+          )}
+
+          {profileOpen && !isMobileView && (
+            <div
+              ref={dropdownRef}
+              role="listbox"
+              aria-label="Opciones de perfil"
+              className={cn(
+                "absolute z-50 overflow-hidden rounded-lg border shadow-lg divide-y divide-border",
+                "ml-10 w-32 bg-popover text-popover-foreground",
+                isCollapsed
+                  ? "left-full top-2 ml-2 -translate-y-1/2 origin-left"
+                  : "top-[-105] left-0 mt-2 origin-top"
+              )}
+            >
+              <div className="flex flex-col gap-0.5 p-1">
+                <ThemeToggle
+                  className="h-9 w-full justify-center gap-0.5 rounded-md border-0 bg-transparent px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                />
+              </div>
+              <div className="p-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    setProfileOpen(false)
+                    setSignOutDialogOpen(true)
+                  }}
+                >
+                  <LogOut className="size-4" />
+                  <span>Cerrar sesión</span>
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </aside>
     )
