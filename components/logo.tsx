@@ -5,9 +5,11 @@ import { cn } from "@/lib/utils";
 type LogoProps = {
     className?: string;
     textClassName?: string;
+    title?: string;
+    subtitle?: string;
 };
 
-export function Logo({ className, textClassName }: LogoProps) {
+export function Logo({ className, textClassName, title = "Budgetview", subtitle = "MonySaver" }: LogoProps) {
     return (
         <div className={cn("flex items-center gap-0", className)}>
             <Image
@@ -20,10 +22,10 @@ export function Logo({ className, textClassName }: LogoProps) {
             />
             <div className={cn("ml-2", textClassName)}>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    MonySaver
+                    {subtitle}
                 </p>
                 <p className="text-2xl font-semibold leading-tight tracking-tight">
-                    Budgetview
+                    {title}
                 </p>
             </div>
         </div>

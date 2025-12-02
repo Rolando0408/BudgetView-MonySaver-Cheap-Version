@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 
 const currencyFormatter = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -229,6 +230,16 @@ export default function PresupuestosPage() {
   const [formError, setFormError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+  const formatBcvAmount = React.useCallback(
+    (usdAmount: number) => {
+      if (!bcvRate || usdAmount === 0) {
+        return null
+      }
+      return formatCurrency(usdAmount * bcvRate, "VES")
+    },
+    [bcvRate]
+  )
 
   const minSelectableMonth = getCurrentMonthValue()
 
@@ -540,47 +551,53 @@ export default function PresupuestosPage() {
     [loadBudgets]
   )
 
-  const summaryCards = [
-    {
-      title: "Presupuesto Total",
-      value: currencyFormatter.format(summary.totalBudget),
-      icon: PiggyBank,
-      accent:
-        "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
-      iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
-    },
-    {
-      title: "Gastado",
-      value: currencyFormatter.format(summary.totalSpent),
-      icon: TrendingDown,
-      accent:
-        "from-red-100/80 to-white text-red-600 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
-      iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
-    },
-    {
-      title: "Disponible",
-      value: currencyFormatter.format(summary.available),
-      icon: CircleDollarSign,
-      accent: summary.available >= 0
-        ? "from-emerald-100/80 to-white text-emerald-600 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40"
-        : "from-red-100/80 to-white text-red-600 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
-      iconStyles: summary.available >= 0
-        ? "bg-emerald-500 text-white dark:bg-emerald-500/60"
-        : "bg-red-500 text-white dark:bg-red-500/60",
-    },
-    {
-      title: "Estado",
-      value: `${summary.controlCount} en control · ${summary.exceededCount} excedidos`,
-      icon: summary.exceededCount > 0 ? AlertTriangle : CheckCircle2,
-      accent: summary.exceededCount > 0
-        ? "from-purple-100/80 to-white text-purple-600 border-purple-200 dark:from-purple-500/10 dark:to-slate-950 dark:text-purple-200 dark:border-purple-500/40"
-        : "from-emerald-100/80 to-white text-emerald-600 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
-      iconStyles: summary.exceededCount > 0
-        ? "bg-purple-500 text-white dark:bg-purple-500/60"
-        : "bg-emerald-500 text-white dark:bg-emerald-500/60",
-      valueClassName: "text-xl",
-    },
-  ]
+  const summaryCards = React.useMemo(
+    () => [
+      {
+        title: "Presupuesto Total",
+        value: currencyFormatter.format(summary.totalBudget),
+        bcvValue: formatBcvAmount(summary.totalBudget),
+        icon: PiggyBank,
+        accent:
+          "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
+        iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
+      },
+      {
+        title: "Gastado",
+        value: currencyFormatter.format(summary.totalSpent),
+        bcvValue: formatBcvAmount(summary.totalSpent),
+        icon: TrendingDown,
+        accent:
+          "from-red-100/80 to-white text-red-600 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+        iconStyles: "bg-red-500 text-white dark:bg-red-500/60",
+      },
+      {
+        title: "Disponible",
+        value: currencyFormatter.format(summary.available),
+        bcvValue: formatBcvAmount(summary.available),
+        icon: CircleDollarSign,
+        accent: summary.available >= 0
+          ? "from-emerald-100/80 to-white text-emerald-600 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40"
+          : "from-red-100/80 to-white text-red-600 border-red-200 dark:from-red-500/10 dark:to-slate-950 dark:text-red-200 dark:border-red-500/40",
+        iconStyles: summary.available >= 0
+          ? "bg-emerald-500 text-white dark:bg-emerald-500/60"
+          : "bg-red-500 text-white dark:bg-red-500/60",
+      },
+      {
+        title: "Estado",
+        value: `${summary.controlCount} en control · ${summary.exceededCount} excedidos`,
+        icon: summary.exceededCount > 0 ? AlertTriangle : CheckCircle2,
+        accent: summary.exceededCount > 0
+          ? "from-purple-100/80 to-white text-purple-600 border-purple-200 dark:from-purple-500/10 dark:to-slate-950 dark:text-purple-200 dark:border-purple-500/40"
+          : "from-emerald-100/80 to-white text-emerald-600 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+        iconStyles: summary.exceededCount > 0
+          ? "bg-purple-500 text-white dark:bg-purple-500/60"
+          : "bg-emerald-500 text-white dark:bg-emerald-500/60",
+        valueClassName: "text-xl",
+      },
+    ],
+    [summary, formatBcvAmount]
+  )
 
   const periodLabel = parsePeriodLabel(`${selectedMonth}-01`)
 
@@ -591,6 +608,13 @@ export default function PresupuestosPage() {
           <h1 className="text-2xl font-semibold mb-1">Presupuestos</h1>
           <p className="text-sm text-muted-foreground">
             Administra tus límites de gasto mensuales por categoría. Periodo seleccionado: {periodLabel}.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {bcvLoading
+              ? "Cargando tasa BCV..."
+              : bcvRate
+              ? `1 US$ = ${formatCurrency(bcvRate, "VES")} (BCV)`
+              : "La tasa BCV no está disponible por ahora."}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -636,6 +660,12 @@ export default function PresupuestosPage() {
         </div>
       )}
 
+      {bcvError && !bcvLoading && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+          {bcvError}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => {
           const Icon = card.icon
@@ -655,6 +685,9 @@ export default function PresupuestosPage() {
               </CardHeader>
               <CardContent>
                 <p className={cn("font-semibold tracking-tight", card.valueClassName ?? "text-3xl")}>{card.value}</p>
+                {card.bcvValue && (
+                  <p className="text-xs text-muted-foreground">≈ {card.bcvValue} BCV</p>
+                )}
               </CardContent>
             </Card>
           )
@@ -692,6 +725,9 @@ export default function PresupuestosPage() {
                 : budget.nearLimit
                 ? "bg-amber-100 text-amber-700"
                 : "bg-emerald-100 text-emerald-700"
+              const spentBcv = formatBcvAmount(budget.spent)
+              const limitBcv = formatBcvAmount(budget.limit)
+              const availableBcv = formatBcvAmount(Math.abs(budget.available))
               return (
                 <Card
                   key={budget.id}
@@ -730,6 +766,12 @@ export default function PresupuestosPage() {
                           de {currencyFormatter.format(budget.limit)}
                         </p>
                       </div>
+                      {(spentBcv || limitBcv) && (
+                        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{spentBcv ? `≈ ${spentBcv} BCV` : null}</span>
+                          <span>{limitBcv ? `≈ ${limitBcv} BCV` : null}</span>
+                        </div>
+                      )}
                       <div className="mt-2 h-3 rounded-full bg-muted/60">
                         <div
                           className={cn(
@@ -757,6 +799,9 @@ export default function PresupuestosPage() {
                       >
                         {currencyFormatter.format(Math.abs(budget.available))}
                       </p>
+                      {availableBcv && (
+                        <p className="text-xs text-muted-foreground">≈ {availableBcv} BCV</p>
+                      )}
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row">

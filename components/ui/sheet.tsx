@@ -33,10 +33,10 @@ const SheetContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
-    <SheetPrimitive.Content
+      <SheetPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-full w-full max-w-xs flex-col border bg-card p-6 shadow-lg transition-all duration-300 ease-in-out data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left sm:max-w-sm",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-full max-w-48 flex-col border bg-card p-6 shadow-lg transition-all duration-300 ease-in-out data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left sm:max-w-sm",
         className
       )}
       {...props}

@@ -22,6 +22,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 import {
   ChartContainer,
   ChartTooltip,
@@ -232,6 +233,17 @@ export default function DashboardPage() {
   const [budgets, setBudgets] = React.useState<BudgetConfig[]>([])
   const [budgetsLoading, setBudgetsLoading] = React.useState(false)
   const [budgetsError, setBudgetsError] = React.useState<string | null>(null)
+  const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+
+  const formatBcvAmount = React.useCallback(
+    (usdAmount: number) => {
+      if (!bcvRate || usdAmount === 0) {
+        return null
+      }
+      return formatCurrency(usdAmount * bcvRate, "VES")
+    },
+    [bcvRate]
+  )
 
   const loadTransactions = React.useCallback(async (activeWallet: string) => {
     const query = supabase
@@ -521,6 +533,9 @@ export default function DashboardPage() {
   }, [filteredTransactions])
 
   const net = summary.income - summary.expense
+  const incomeBcv = formatBcvAmount(summary.income)
+  const expenseBcv = formatBcvAmount(summary.expense)
+  const netBcv = formatBcvAmount(net)
 
   const expenseBreakdown = React.useMemo(() => {
     const totals = new Map<string, { label: string; value: number }>()
@@ -719,6 +734,12 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {bcvError && !bcvLoading && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+          {bcvError}
+        </div>
+      )}
+
       <section className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -815,6 +836,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currencyFormatter.format(summary.income)}</div>
+            {incomeBcv && (
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                ≈ {incomeBcv} BCV
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">Total de ingresos en el periodo</p>
           </CardContent>
         </Card>
@@ -826,6 +852,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currencyFormatter.format(summary.expense)}</div>
+            {expenseBcv && (
+              <p className="text-xs font-semibold text-red-600 dark:text-red-300">
+                ≈ {expenseBcv} BCV
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">Total de gastos en el periodo</p>
           </CardContent>
         </Card>
@@ -837,6 +868,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currencyFormatter.format(net)}</div>
+            {netBcv && (
+              <p className="text-xs font-semibold text-muted-foreground">
+                ≈ {netBcv} BCV
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">Ingresos - Gastos</p>
           </CardContent>
         </Card>
@@ -878,7 +914,12 @@ export default function DashboardPage() {
                         content={
                           <ChartTooltipContent
                             hideLabel
-                            valueFormatter={(value) => currencyFormatter.format(Number(value) || 0)}
+                            valueFormatter={(value) => {
+                              const numericValue = Number(value) || 0
+                              const usdValue = currencyFormatter.format(numericValue)
+                              const vesValue = formatBcvAmount(numericValue)
+                              return vesValue ? `${usdValue} • ${vesValue} BCV` : usdValue
+                            }}
                           />
                         }
                       />
@@ -940,7 +981,13 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
                   <YAxis tickFormatter={(value) => currencyFormatter.format(value)} tick={{ fontSize: 12 }} width={90} />
-                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Tooltip
+                    formatter={(value: number) => {
+                      const usdValue = currencyFormatter.format(value)
+                      const vesValue = formatBcvAmount(value)
+                      return vesValue ? `${usdValue} • ${vesValue} BCV` : usdValue
+                    }}
+                  />
                   <Legend />
                   <Line type="monotone" dataKey="gastos" stroke="#ef4444" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="ingresos" stroke="#10b981" strokeWidth={2} dot={false} />
@@ -992,6 +1039,9 @@ export default function DashboardPage() {
 
                 const progress = Math.min(alert.percentage, 100)
 
+                const spentBcv = formatBcvAmount(alert.spent)
+                const limitBcv = formatBcvAmount(alert.limit)
+
                 return (
                   <div key={alert.id} className="space-y-2 rounded-xl border p-4">
                     <div className="flex items-center justify-between text-sm font-medium">
@@ -1001,10 +1051,18 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{currencyFormatter.format(alert.spent)}</span>
-                      <span>
-                        {currencyFormatter.format(alert.limit)}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-foreground/90">{currencyFormatter.format(alert.spent)}</span>
+                        {spentBcv && (
+                          <span className="text-xs">≈ {spentBcv} BCV</span>
+                        )}
+                      </div>
+                      <div className="flex flex-col text-right">
+                        <span className="font-medium text-foreground/90">{currencyFormatter.format(alert.limit)}</span>
+                        {limitBcv && (
+                          <span className="text-xs">≈ {limitBcv} BCV</span>
+                        )}
+                      </div>
                     </div>
                     <div className="h-3 rounded-full bg-muted">
                       <div

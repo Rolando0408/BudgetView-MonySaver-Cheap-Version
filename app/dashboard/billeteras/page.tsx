@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 
 const PERIOD_OPTIONS = [
   { label: "Últimos 7 días", value: "7days" },
@@ -125,6 +126,16 @@ export default function BilleterasPage() {
   const [formError, setFormError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [actionPendingId, setActionPendingId] = React.useState<string | null>(null)
+  const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
+  const formatBcvAmount = React.useCallback(
+    (usdAmount: number) => {
+      if (!bcvRate || usdAmount === 0) {
+        return null
+      }
+      return formatCurrency(usdAmount * bcvRate, "VES")
+    },
+    [bcvRate]
+  )
 
   const loadWallets = React.useCallback(
     async (signal?: AbortSignal) => {
@@ -231,6 +242,38 @@ export default function BilleterasPage() {
     )
   }, [wallets])
 
+  const summaryCards = React.useMemo(
+    () => [
+      {
+        title: "Balance Total",
+        value: currencyFormatter.format(summary.totalBalance),
+        bcvValue: formatBcvAmount(summary.totalBalance),
+        icon: DollarSign,
+        accent:
+          "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
+        iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
+      },
+      {
+        title: "Total Billeteras",
+        value: wallets.length.toString(),
+        icon: Wallet,
+        accent:
+          "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
+        iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
+      },
+      {
+        title: "Movimientos",
+        value: `${summary.positive} positivas · ${summary.negative} negativas`,
+        icon: TrendingUp,
+        accent:
+          "from-purple-100/80 to-white text-purple-700 border-purple-200 dark:from-purple-500/10 dark:to-slate-950 dark:text-purple-200 dark:border-purple-500/40",
+        iconStyles: "bg-purple-500 text-white dark:bg-purple-500/60",
+        valueClassName: "text-2xl",
+      },
+    ],
+    [summary, wallets.length, formatBcvAmount]
+  )
+
   const handleOpenDialog = (mode: WalletDialogMode, wallet?: WalletSummary) => {
     setDialogMode(mode)
     if (mode === "edit" && wallet) {
@@ -329,34 +372,6 @@ export default function BilleterasPage() {
     }
   }
 
-  const summaryCards = [
-    {
-      title: "Balance Total",
-      value: currencyFormatter.format(summary.totalBalance),
-      icon: DollarSign,
-      accent:
-        "from-emerald-100/80 to-white text-emerald-700 border-emerald-200 dark:from-emerald-500/10 dark:to-slate-950 dark:text-emerald-200 dark:border-emerald-500/40",
-      iconStyles: "bg-emerald-500 text-white dark:bg-emerald-500/60",
-    },
-    {
-      title: "Total Billeteras",
-      value: wallets.length.toString(),
-      icon: Wallet,
-      accent:
-        "from-blue-100/80 to-white text-blue-700 border-blue-200 dark:from-blue-500/10 dark:to-slate-950 dark:text-blue-200 dark:border-blue-500/40",
-      iconStyles: "bg-blue-500 text-white dark:bg-blue-500/60",
-    },
-    {
-      title: "Movimientos",
-      value: `${summary.positive} positivas · ${summary.negative} negativas`,
-      icon: TrendingUp,
-      accent:
-        "from-purple-100/80 to-white text-purple-700 border-purple-200 dark:from-purple-500/10 dark:to-slate-950 dark:text-purple-200 dark:border-purple-500/40",
-      iconStyles: "bg-purple-500 text-white dark:bg-purple-500/60",
-      valueClassName: "text-2xl",
-    },
-  ]
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -365,6 +380,13 @@ export default function BilleterasPage() {
           <h1 className="text-3xl font-semibold">Gestiona tus cuentas</h1>
           <p className="text-sm text-muted-foreground">
             Controla tus saldos, movimientos y organiza tus billeteras de manera centralizada.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {bcvLoading
+              ? "Cargando tasa BCV..."
+              : bcvRate
+              ? `1 US$ = ${formatCurrency(bcvRate, "VES")} (BCV)`
+              : "La tasa BCV no está disponible por ahora."}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -475,6 +497,12 @@ export default function BilleterasPage() {
         </div>
       )}
 
+      {bcvError && !bcvLoading && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+          {bcvError}
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {summaryCards.map((card) => {
           const Icon = card.icon
@@ -491,6 +519,9 @@ export default function BilleterasPage() {
               </CardHeader>
               <CardContent>
                 <p className={cn("font-semibold tracking-tight", card.valueClassName ?? "text-3xl")}>{card.value}</p>
+                {card.bcvValue && (
+                  <p className="text-xs text-muted-foreground">≈ {card.bcvValue} BCV</p>
+                )}
               </CardContent>
             </Card>
           )
@@ -515,7 +546,12 @@ export default function BilleterasPage() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {wallets.map((wallet) => (
+            {wallets.map((wallet) => {
+              const balanceBcv = formatBcvAmount(wallet.balance)
+              const incomeBcv = formatBcvAmount(wallet.income)
+              const expenseBcv = formatBcvAmount(wallet.expense)
+
+              return (
               <Card
                 key={wallet.id}
                 className="border bg-card shadow-sm transition-shadow hover:shadow-md"
@@ -551,6 +587,9 @@ export default function BilleterasPage() {
                     <p className="text-2xl font-semibold text-emerald-600">
                       {currencyFormatter.format(wallet.balance)}
                     </p>
+                        {balanceBcv && (
+                          <p className="text-xs text-muted-foreground">≈ {balanceBcv} BCV</p>
+                        )}
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-xl border bg-emerald-50/50 px-3 py-2 dark:border-emerald-500/20 dark:bg-emerald-500/5">
@@ -558,14 +597,20 @@ export default function BilleterasPage() {
                         <ArrowUpCircle className="size-4" />
                         <span>Ingresos</span>
                       </div>
-                      <p className="font-semibold">{currencyFormatter.format(wallet.income)}</p>
+                          <p className="font-semibold">{currencyFormatter.format(wallet.income)}</p>
+                          {incomeBcv && (
+                            <p className="text-xs text-muted-foreground">≈ {incomeBcv} BCV</p>
+                          )}
                     </div>
                     <div className="rounded-xl border bg-red-50/60 px-3 py-2 dark:border-red-500/20 dark:bg-red-500/5">
                       <div className="flex items-center gap-1 text-red-600">
                         <ArrowDownCircle className="size-4" />
                         <span>Gastos</span>
                       </div>
-                      <p className="font-semibold">{currencyFormatter.format(wallet.expense)}</p>
+                          <p className="font-semibold">{currencyFormatter.format(wallet.expense)}</p>
+                          {expenseBcv && (
+                            <p className="text-xs text-muted-foreground">≈ {expenseBcv} BCV</p>
+                          )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
@@ -603,7 +648,8 @@ export default function BilleterasPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>

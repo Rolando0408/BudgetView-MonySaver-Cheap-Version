@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabaseClient"
 import { GLOBAL_WALLET_ID, GLOBAL_WALLET_LABEL } from "@/lib/wallets"
+import { formatCurrency, useBcvRate } from "@/lib/currency"
 import { Logo } from "@/components/logo";
 
 type TransactionBalanceRow = {
@@ -38,21 +39,6 @@ type HeaderProps = {
     currency?: string
     selectedWallet?: string
     onWalletChange?: (walletId: string) => void
-}
-
-const currencyFormatters = new Map<string, Intl.NumberFormat>()
-function formatCurrency(value: number, currency: string) {
-    if (!currencyFormatters.has(currency)) {
-        currencyFormatters.set(
-            currency,
-            new Intl.NumberFormat("es-ES", {
-                style: "currency",
-                currency,
-                maximumFractionDigits: 2,
-            })
-        )
-    }
-    return currencyFormatters.get(currency)!.format(value)
 }
 
 export function Header({
@@ -86,6 +72,7 @@ export function Header({
     const [balance, setBalance] = React.useState<number>(currentBalance)
     const [balanceLoading, setBalanceLoading] = React.useState(true)
     const [balanceError, setBalanceError] = React.useState<string | null>(null)
+    const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
 
     React.useEffect(() => {
         if (!selectedWallet) return
@@ -338,6 +325,11 @@ export function Header({
         onWalletChange?.(value)
     }
 
+    const balanceInVES = React.useMemo(() => {
+        if (!bcvRate || balance <= 0) return null
+        return balance * bcvRate
+    }, [balance, bcvRate])
+
     const selectedWalletLabel = wallets.find((wallet) => wallet.id === walletId)?.name
     const walletButtonLabel = walletsLoading
         ? "Cargando billeteras..."
@@ -353,7 +345,12 @@ export function Header({
             )}
         >
             <div className="flex w-full flex-wrap items-center gap-3 sm:flex-nowrap sm:justify-between">
-                <Logo className="shrink-0" textClassName="hidden sm:block" />
+                <Logo
+                    className="shrink-0"
+                    textClassName="hidden sm:block"
+                    title={appName}
+                    subtitle={tagline}
+                />
 
                 <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-6">
                     <div className="flex w-full gap-2 sm:hidden">
@@ -362,9 +359,16 @@ export function Header({
                             {balanceLoading ? (
                                 <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" />
                             ) : walletId ? (
-                                <p className="text-sm font-semibold tracking-tight">
-                                    {formatCurrency(balance, currency)}
-                                </p>
+                                <>
+                                    <p className="text-sm font-semibold tracking-tight">
+                                        {formatCurrency(balance, currency)}
+                                    </p>
+                                    {balanceInVES && (
+                                        <p className="text-[0.65rem] text-muted-foreground">
+                                            ≈ {formatCurrency(balanceInVES, "VES")}
+                                        </p>
+                                    )}
+                                </>
                             ) : (
                                 <p className="text-[0.65rem] text-muted-foreground">Selecciona una billetera</p>
                             )}
@@ -424,12 +428,22 @@ export function Header({
                                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
                             </div>
                         ) : walletId ? (
-                            <p className="text-2xl font-semibold tracking-tight">{formatCurrency(balance, currency)}</p>
+                            <>
+                                <p className="text-md font-semibold tracking-tight">{formatCurrency(balance, currency)}</p>
+                                {balanceInVES && (
+                                    <p className="text-xs text-muted-foreground">
+                                        ≈ {formatCurrency(balanceInVES, "VES")} {bcvLoading ? "(actualizando...)" : "(BCV)"}
+                                    </p>
+                                )}
+                            </>
                         ) : (
                             <p className="text-xs text-muted-foreground">Selecciona una billetera para ver tu saldo.</p>
                         )}
                         {balanceError && !balanceLoading && (
                             <p className="mt-1 text-xs font-medium text-destructive">{balanceError}</p>
+                        )}
+                        {bcvError && !bcvLoading && (
+                            <p className="mt-1 text-xs text-destructive">{bcvError}</p>
                         )}
                     </div>
 

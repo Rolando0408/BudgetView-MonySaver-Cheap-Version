@@ -149,15 +149,18 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
     return (
       <aside
         className={cn(
-          "flex max-h-[calc(100svh-6rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out min-h-0 sm:sticky sm:top-26 sm:self-start",
-          isCollapsed ? "w-16" : "w-60",
+          "flex max-h-[calc(100svh-5rem)] flex-col gap-3 rounded-xl bg-card p-3 shadow-sm border transition-all duration-300 ease-in-out min-h-0 sm:sticky sm:top-26 sm:self-start",
+          isCollapsed && !forceExpanded ? "w-16" : "w-60",
           className,
           extraClassName
         )}
+        style={{
+          width: forceExpanded ? "12rem" : undefined,
+        }}
       >
-        <div className="flex items-center gap-25">
+        <div className="flex items-center md:gap-35 lg:gap-35">
           {!isCollapsed && (
-            <span className="text-sm font-semibold tracking-tight">Budgetview</span>
+            <span className="text-sm font-semibold tracking-tight">Menú</span>
           )}
           {showCollapseToggle && (
             <div className="flex items-center gap-1 ml-[0.2em] transition-opacity duration-300 ease-in-out">
@@ -264,7 +267,7 @@ export function Sidebar({ className, onNavigate, navigating = false }: SidebarPr
           <Menu className="size-5" />
         </Button>
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent className="h-full w-full max-w-xs p-0">
+          <SheetContent className="h-full w-full max-w-48 p-0">
             <div className="flex h-full flex-col overflow-hidden bg-card">
               <SidebarContent
                 className="w-full rounded-none border-0 shadow-none"
