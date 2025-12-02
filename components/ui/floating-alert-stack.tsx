@@ -15,8 +15,14 @@ const POSITION_CLASSES: Record<NonNullable<FloatingAlertStackProps["position"]>,
   "bottom-right": "bottom-4 right-4 items-end",
 }
 
+type AlertElement = React.ReactElement<{ className?: string }>
+
 export function FloatingAlertStack({ position = "top-right", className, children }: FloatingAlertStackProps) {
-  const alerts = React.useMemo(() => React.Children.toArray(children).filter(Boolean), [children])
+  const alerts = React.useMemo(() => {
+    return React.Children.toArray(children).filter((child): child is AlertElement =>
+      React.isValidElement(child)
+    )
+  }, [children])
 
   if (alerts.length === 0) {
     return null
@@ -26,15 +32,12 @@ export function FloatingAlertStack({ position = "top-right", className, children
 
   return (
     <div className={cn("pointer-events-none fixed z-50 flex max-w-md flex-col gap-3", positionClass, className)}>
-      {alerts.map((child, index) => {
-        if (!React.isValidElement(child)) {
-          return null
-        }
-        return React.cloneElement(child, {
+      {alerts.map((child, index) =>
+        React.cloneElement(child, {
           className: cn("pointer-events-auto shadow-lg", child.props.className),
           key: child.key ?? index,
         })
-      })}
+      )}
     </div>
   )
 }
