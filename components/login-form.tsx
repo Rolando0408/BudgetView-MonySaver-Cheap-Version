@@ -166,7 +166,7 @@ export function LoginForm({
         <Field data-invalid={!!errors.password}>
           <div className="flex items-center">
             <FieldLabel htmlFor="password">Contraseña</FieldLabel>
-            <a href="#" className="ml-auto text-sm underline-offset-4 hover:underline">
+            <a href="/recuperar-contrasena" className="ml-auto text-sm underline-offset-4 hover:underline">
               ¿Olvidaste tu contraseña?
             </a>
           </div>
