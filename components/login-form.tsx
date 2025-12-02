@@ -15,6 +15,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { supabase } from "@/lib/supabaseClient"
 import { Loader2, CheckCircle2, CircleAlert } from "lucide-react"
 
@@ -47,13 +48,15 @@ export function LoginForm({
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(values.email)) {
-        next.email = "Correo inválido"
+        next.email = "Ingresa un correo con formato válido (ejemplo: usuario@dominio.com)"
       }
     }
     if (!values.password) {
       next.password = "La contraseña es obligatoria"
-    } else if (values.password.length < 6) {
-      next.password = "La contraseña debe tener al menos 6 caracteres"
+    } else if (values.password.length < 8) {
+      next.password = "La contraseña debe tener al menos 8 caracteres"
+    } else if (/\s/.test(values.password)) {
+      next.password = "La contraseña no puede contener espacios"
     }
     return next
   }
@@ -142,7 +145,7 @@ export function LoginForm({
           </Alert>
         )}
       </FloatingAlertStack>
-      <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
+      <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} noValidate {...props}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">Inicia sesión en tu cuenta</h1>
@@ -170,9 +173,8 @@ export function LoginForm({
               ¿Olvidaste tu contraseña?
             </a>
           </div>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-invalid={!!errors.password}

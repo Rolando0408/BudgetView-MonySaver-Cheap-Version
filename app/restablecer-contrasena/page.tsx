@@ -7,7 +7,7 @@ import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Label } from "@/components/ui/label"
 import { CheckCircle2, CircleAlert, Loader2, LockKeyhole } from "lucide-react"
 
@@ -93,6 +93,16 @@ export default function ResetPasswordPage() {
 
     if (password.length < MIN_PASSWORD_LENGTH) {
       setError(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`)
+      return
+    }
+
+    if (/\s/.test(password)) {
+      setError("La contraseña no puede contener espacios.")
+      return
+    }
+
+    if (/\s/.test(confirmPassword)) {
+      setError("La confirmación no puede contener espacios.")
       return
     }
 
@@ -189,9 +199,8 @@ export default function ResetPasswordPage() {
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <div className="space-y-2">
                   <Label htmlFor="new-password">Nueva contraseña</Label>
-                  <Input
+                  <PasswordInput
                     id="new-password"
-                    type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="••••••••"
@@ -201,9 +210,8 @@ export default function ResetPasswordPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirmar contraseña</Label>
-                  <Input
+                  <PasswordInput
                     id="confirm-password"
-                    type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     placeholder="••••••••"

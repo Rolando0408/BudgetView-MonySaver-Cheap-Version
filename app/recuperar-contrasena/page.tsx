@@ -85,7 +85,7 @@ export default function PasswordRecoveryPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-5" onSubmit={handleSubmit} noValidate>
             <div className="space-y-2">
               <Label htmlFor="recovery-email">Correo electrónico</Label>
               <Input

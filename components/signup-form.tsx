@@ -10,11 +10,13 @@ import { FloatingAlertStack } from "@/components/ui/floating-alert-stack"
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { supabase } from "@/lib/supabaseClient"
 import { Loader2, ArrowLeft, CircleAlert, CheckCircle2 } from "lucide-react"
 
@@ -28,6 +30,7 @@ export function SignupForm({
   const [confirmPassword, setConfirmPassword] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
   const [notice, setNotice] = React.useState<string | null>(null)
+  const [emailError, setEmailError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [oauthLoading, setOauthLoading] = React.useState(false)
   const router = useRouter()
@@ -39,6 +42,29 @@ export function SignupForm({
 
     const trimmedName = name.trim()
     const trimmedEmail = email.trim().toLowerCase()
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    if (!emailRegex.test(trimmedEmail)) {
+      setEmailError("Ingresa un correo con formato válido (ejemplo: usuario@dominio.com)")
+      return
+    }
+
+    setEmailError(null)
+
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres")
+      return
+    }
+
+    if (/\s/.test(password)) {
+      setError("La contraseña no puede contener espacios")
+      return
+    }
+
+    if (/\s/.test(confirmPassword)) {
+      setError("La confirmación no puede contener espacios")
+      return
+    }
 
     if (password !== confirmPassword) {
       setError("Las contraseñas no coinciden")
@@ -149,7 +175,7 @@ export function SignupForm({
           </Alert>
         )}
       </FloatingAlertStack>
-      <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} {...props}>
+      <form className={cn("flex flex-col gap-6", className)} onSubmit={onSubmit} noValidate {...props}>
       <FieldGroup>
         <Field>
           <Button
@@ -187,9 +213,19 @@ export function SignupForm({
             type="email"
             placeholder="tucorreo@ejemplo.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value
+              setEmail(value)
+              if (emailError) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                if (emailRegex.test(value.trim().toLowerCase())) {
+                  setEmailError(null)
+                }
+              }
+            }}
             required
           />
+          <FieldError errors={emailError ? [{ message: emailError }] : []} />
           <FieldDescription>
             Usaremos este correo para contactarte. No lo compartiremos con
             nadie más.
@@ -197,24 +233,24 @@ export function SignupForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="password">Contraseña</FieldLabel>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
             required
           />
           <FieldDescription>
-            Debe tener al menos 8 caracteres.
+            Debe tener al menos 8 caracteres y no puede incluir espacios.
           </FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="confirm-password">Confirmar contraseña</FieldLabel>
-          <Input
+          <PasswordInput
             id="confirm-password"
-            type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={8}
             required
           />
           <FieldDescription>Vuelve a escribir tu contraseña.</FieldDescription>
