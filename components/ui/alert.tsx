@@ -4,20 +4,15 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border p-4 text-sm [&>svg~*]:pl-7 [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg+div]:translate-y-[-3px]",
+  "relative w-full rounded-xl border p-4 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:backdrop-blur [&>svg~*]:pl-7 [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg+div]:translate-y-[-3px]",
   {
     variants: {
       variant: {
-        default:
-          "bg-background text-foreground border-border",
-        destructive:
-          "border-destructive/40 text-destructive bg-destructive/10 dark:border-destructive/30",
-        success:
-          "border-emerald-500/30 text-emerald-700 bg-emerald-500/10 dark:border-emerald-500/40 dark:text-emerald-100",
-        warning:
-          "border-amber-500/40 text-amber-900 bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-100",
-        info:
-          "border-sky-500/40 text-sky-900 bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-100",
+        default: "border-border bg-card/95 text-card-foreground",
+        destructive: "border-destructive/70 bg-destructive text-destructive-foreground",
+        success: "border-emerald-600 bg-emerald-500 text-emerald-950 dark:text-emerald-50",
+        warning: "border-amber-600 bg-amber-500 text-amber-950 dark:text-amber-50",
+        info: "border-sky-600 bg-sky-500 text-white",
       },
     },
     defaultVariants: {

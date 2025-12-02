@@ -17,7 +17,7 @@ const POSITION_CLASSES: Record<NonNullable<FloatingAlertStackProps["position"]>,
 
 type AlertElement = React.ReactElement<{ className?: string }>
 
-export function FloatingAlertStack({ position = "top-right", className, children }: FloatingAlertStackProps) {
+export function FloatingAlertStack({ position = "bottom-right", className, children }: FloatingAlertStackProps) {
   const alerts = React.useMemo(() => {
     return React.Children.toArray(children).filter((child): child is AlertElement =>
       React.isValidElement(child)
@@ -28,7 +28,7 @@ export function FloatingAlertStack({ position = "top-right", className, children
     return null
   }
 
-  const positionClass = POSITION_CLASSES[position] ?? POSITION_CLASSES["top-right"]
+  const positionClass = POSITION_CLASSES[position] ?? POSITION_CLASSES["bottom-right"]
 
   return (
     <div className={cn("pointer-events-none fixed z-50 flex max-w-md flex-col gap-3", positionClass, className)}>
