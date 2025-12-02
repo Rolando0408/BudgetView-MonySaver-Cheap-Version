@@ -37,12 +37,24 @@ export default function ResetPasswordPage() {
         const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""))
         const searchParams = currentUrl.searchParams
         const codeFromQuery = searchParams.get("code")
+        const tokenFromQuery = searchParams.get("token")
+        const typeFromQuery = searchParams.get("type")
         const accessToken = hashParams.get("access_token")
         const refreshToken = hashParams.get("refresh_token")
 
         if (codeFromQuery) {
           const { error } = await supabase.auth.exchangeCodeForSession(codeFromQuery)
           if (error) throw error
+          setSessionReady(true)
+        } else if (tokenFromQuery && typeFromQuery === "recovery") {
+          const { data, error } = await supabase.auth.verifyOtp({
+            type: "recovery",
+            token_hash: tokenFromQuery,
+          })
+          if (error) throw error
+          if (!data.session) {
+            throw new Error("No pudimos iniciar sesión con el enlace proporcionado.")
+          }
           setSessionReady(true)
         } else if (accessToken && refreshToken) {
           const { error } = await supabase.auth.setSession({
