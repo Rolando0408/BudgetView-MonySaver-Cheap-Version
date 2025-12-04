@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   CircleAlert,
   AlertTriangle,
+  X,
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -77,6 +78,7 @@ export default function TransaccionesPage() {
   const [amountError, setAmountError] = React.useState<string | null>(null)
   const [periodFilter, setPeriodFilter] = React.useState<PeriodFilter>("thisMonth")
   const [billeteraId, setBilleteraId] = React.useState<string | null>(null)
+  const [globalAlertDismissed, setGlobalAlertDismissed] = React.useState(false)
   
   // Custom date range state
   const [customStartDate, setCustomStartDate] = React.useState<Date | undefined>(undefined)
@@ -87,6 +89,7 @@ export default function TransaccionesPage() {
   const [formTipo, setFormTipo] = React.useState<TransactionType>("gasto")
   const [formCategoriaId, setFormCategoriaId] = React.useState("")
   const [formDescripcion, setFormDescripcion] = React.useState("")
+  const [formFecha, setFormFecha] = React.useState<Date>(new Date())
   const [amountCurrency, setAmountCurrency] = React.useState<"USD" | "VES">("USD")
   const { rate: bcvRate, loading: bcvLoading, error: bcvError } = useBcvRate()
   const [editingTransaction, setEditingTransaction] = React.useState<Transaction | null>(null)
@@ -309,6 +312,12 @@ export default function TransaccionesPage() {
     setFilteredTransactions(filtered)
   }, [transactions, periodFilter, customStartDate, customEndDate])
 
+  React.useEffect(() => {
+    if (!isGlobalWallet) {
+      setGlobalAlertDismissed(false)
+    }
+  }, [isGlobalWallet])
+
   const resetFormState = React.useCallback(() => {
     setFormMonto("")
     setFormTipo("gasto")
@@ -317,6 +326,7 @@ export default function TransaccionesPage() {
     setFormError(null)
     setAmountError(null)
     setAmountCurrency("USD")
+    setFormFecha(new Date())
   }, [])
 
   const handleCurrencyChange = React.useCallback(
@@ -393,6 +403,11 @@ export default function TransaccionesPage() {
         return
       }
 
+      if (!formFecha) {
+        setFormError("Selecciona una fecha para la transacción.")
+        return
+      }
+
       if (!billeteraId || billeteraId === GLOBAL_WALLET_ID) {
         setFormError("Selecciona una billetera específica desde el encabezado para registrar transacciones.")
         return
@@ -410,6 +425,9 @@ export default function TransaccionesPage() {
 
         const descripcionValue = formDescripcion.trim() ? formDescripcion.trim() : null
 
+        const fechaSeleccionada = new Date(formFecha)
+        fechaSeleccionada.setHours(12, 0, 0, 0)
+
         const transactionData = {
           monto,
           tipo: formTipo,
@@ -417,7 +435,7 @@ export default function TransaccionesPage() {
           categoria_id: formCategoriaId,
           usuario_id: user.id,
           billetera_id: billeteraId,
-          fecha_transaccion: new Date().toISOString(),
+          fecha_transaccion: fechaSeleccionada.toISOString(),
         }
 
         const { error: insertError } = await supabase.from("transacciones").insert(transactionData)
@@ -438,7 +456,7 @@ export default function TransaccionesPage() {
         setSaving(false)
       }
     },
-    [formMonto, formTipo, formCategoriaId, formDescripcion, billeteraId, loadData, resetFormState, amountCurrency, bcvRate]
+    [formMonto, formTipo, formCategoriaId, formDescripcion, billeteraId, loadData, resetFormState, amountCurrency, bcvRate, formFecha]
   )
 
   // Filter categories by type
@@ -561,13 +579,25 @@ export default function TransaccionesPage() {
             <AlertDescription>{bcvError}</AlertDescription>
           </Alert>
         )}
-        {isGlobalWallet && (
-          <Alert variant="warning">
-            <AlertTriangle className="size-4" aria-hidden />
-            <AlertTitle>Modo global activo</AlertTitle>
-            <AlertDescription>
-              Estás en modo <span className="font-semibold">Global</span>. Selecciona una billetera específica en el encabezado para registrar nuevas transacciones.
-            </AlertDescription>
+        {isGlobalWallet && !globalAlertDismissed && (
+          <Alert variant="warning" className="flex items-start gap-3">
+            <AlertTriangle className="size-4 mt-0.5" aria-hidden />
+            <div className="flex-1 space-y-1">
+              <AlertTitle>Modo global activo</AlertTitle>
+              <AlertDescription>
+                Estás en modo <span className="font-semibold">Global</span>. Selecciona una billetera específica en el encabezado para registrar nuevas transacciones.
+              </AlertDescription>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label="Ocultar alerta de modo global"
+              onClick={() => setGlobalAlertDismissed(true)}
+            >
+              <X className="size-4 mr-7 text-white" />
+            </Button>
           </Alert>
         )}
         {formError && (
@@ -850,13 +880,40 @@ export default function TransaccionesPage() {
                 )}
               </div>
 
+              {/* Fecha */}
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Fecha</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={saving || isGlobalWallet}
+                      className="flex w-full items-center justify-start gap-2 rounded-md bg-muted/50 px-4 py-3 text-left text-base font-medium"
+                    >
+                      <CalendarIcon className="size-4" />
+                      {formFecha ? format(formFecha, "PPP", { locale: es }) : "Selecciona una fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={formFecha}
+                      onSelect={(date) => date && setFormFecha(date)}
+                      initialFocus
+                      locale={es}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
               {/* Categoría */}
               <div className="space-y-2">
                 <Label htmlFor="transaction-categoria" className="text-base font-semibold">
                   Categoría
                 </Label>
                 <Select
-                  value={formCategoriaId || undefined}
+                  value={formCategoriaId || ""}
                   onValueChange={setFormCategoriaId}
                   disabled={saving || isGlobalWallet || filteredCategories.length === 0}
                 >
@@ -906,23 +963,34 @@ export default function TransaccionesPage() {
               </div>
 
               {/* Submit Button */}
-              <Button
-                type="submit"
-                disabled={saving || isGlobalWallet || !!amountError}
-                className="w-full h-12 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="mr-2 size-4" />
-                    Guardar Transacción
-                  </>
-                )}
-              </Button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetFormState}
+                  disabled={saving}
+                  className="h-12 text-base font-semibold"
+                >
+                  Limpiar campos
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={saving || isGlobalWallet || !!amountError}
+                  className="h-12 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 size-4" />
+                      Guardar Transacción
+                    </>
+                  )}
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>
